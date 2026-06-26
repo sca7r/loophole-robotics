@@ -1,0 +1,18 @@
+# Strict grasp: shaped lift + contact-time bonus + motion penalty.
+# Closer to what a real "grasp" reward looks like; still gameable in subtle ways.
+reward: strict_grasp
+
+env:
+  n_waypoints: 6
+  sim_seconds: 3.0
+
+optimizer:
+  population: 32
+  elite: 8
+  sigma: 0.6
+  sigma_decay: 0.97
+  init_scale: 0.3
+  generations: 80
+  seed: 1
+
+output_dir: runs

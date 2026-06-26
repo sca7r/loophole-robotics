@@ -1,43 +1,49 @@
 # Loophole Robotics
 
-A product by Helix.
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Loophole Robotics explores what happens when you give an optimizer a reward function
-and get out of the way. Physics simulation, evolution strategies, and eventually real
-hardware, all built around one idea: the optimizer will always find the loophole.
+A robotics product by Helix. Loophole Robotics
+explores what happens when you give a robot a reward function and get out of
+the way, physics simulation, evolution strategies, and eventually real
+hardware, all built around one idea: **the optimizer will always find the
+loophole.**
 
 ---
 
 ## Applications
 
 | App | Description | Status |
-|-----|-------------|--------|
-| [`loophole-arm`](./loophole-arm) | Simulated robot arm optimized via evolution strategy in MuJoCo | 🟢 Active |
+| --- | --- | --- |
+| [`loophole-arm`](./loophole-arm) | Reward-hacking on a UR5e + Robotiq 2F-85 in MuJoCo | 🟢 Active |
 
 ---
 
-## Repo structure
+## Repository layout
 
 ```
 loophole-robotics/
-├── loophole-arm/        # Cup-lift sim: reward hacking demo
-├── shared/              # Common utilities, models, configs (future)
+├── loophole-arm/      # Application: cup-lift, evolution strategy, reward registry
+├── shared/            # Common utilities, scenes, configs reused across apps
+├── LICENSE
 └── README.md
 ```
 
-## Roadmap
-
-- [ ] Improve grasp physics in `loophole-arm`
-- [ ] Add domain randomization for sim-to-real transfer
-- [ ] Integrate a real arm (SO-101 / xArm)
-- [ ] Second application TBD
+Each application is a self-contained Python project with its own dependencies,
+tests, CI, and CLI. Code shared between two or more apps moves into `shared/`
+and is referenced as a path-installed dependency.
 
 ---
 
-## Part of
+## Hierarchy
 
 ```
 Helix
-└── Loophole Robotics        ← you are here
+└── Loophole Robotics
     └── Loophole Arm
 ```
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
