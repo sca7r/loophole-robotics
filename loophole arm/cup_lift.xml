@@ -1,0 +1,49 @@
+<mujoco model="loophole_robotics">
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"/>
+  <compiler autolimits="true"/>
+  <default>
+    <joint damping="4.0" armature="0.3"/>
+    <geom friction="1.5 0.05 0.001" density="700"/>
+    <position kp="200" forcerange="-150 150"/>
+  </default>
+  <worldbody>
+    <light pos="0 0 2" dir="0 0 -1"/>
+    <geom name="floor" type="plane" size="2 2 0.1" rgba="0.85 0.85 0.85 1"/>
+    <geom name="post" type="box" pos="-0.2 0 0.16" size="0.04 0.04 0.16" rgba="0.3 0.3 0.35 1"/>
+    <geom name="table" type="box" pos="0.18 0 0.075" size="0.2 0.2 0.075" rgba="0.6 0.45 0.3 1"/>
+
+    <!-- arm reaches forward (+x) from the post, gripper points down -->
+    <body name="upper" pos="-0.2 0 0.32">
+      <joint name="shoulder" type="hinge" axis="0 1 0" range="-2.6 2.6"/>
+      <geom type="capsule" fromto="0 0 0 0.22 0 0" size="0.022" rgba="0.4 0.5 0.8 1"/>
+      <body name="fore" pos="0.22 0 0">
+        <joint name="elbow" type="hinge" axis="0 1 0" range="-2.8 2.8"/>
+        <geom type="capsule" fromto="0 0 0 0.18 0 0" size="0.02" rgba="0.4 0.6 0.8 1"/>
+        <body name="wrist" pos="0.18 0 0">
+          <joint name="wrist" type="hinge" axis="0 1 0" range="-2.8 2.8"/>
+          <geom type="box" size="0.02 0.02 0.03" pos="0 0 -0.03" rgba="0.5 0.5 0.55 1"/>
+          <body name="lfing" pos="0.03 0 -0.08">
+            <joint name="lgrip" type="slide" axis="-1 0 0" range="0 0.04"/>
+            <geom type="box" size="0.008 0.02 0.035" rgba="0.2 0.2 0.2 1"/>
+          </body>
+          <body name="rfing" pos="-0.03 0 -0.08">
+            <joint name="rgrip" type="slide" axis="1 0 0" range="0 0.04"/>
+            <geom type="box" size="0.008 0.02 0.035" rgba="0.2 0.2 0.2 1"/>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <body name="cup" pos="0.2 0 0.2">
+      <freejoint name="cupfree"/>
+      <geom name="cupgeom" type="cylinder" size="0.028 0.05" rgba="0.85 0.3 0.3 1" density="250"/>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="a_shoulder" joint="shoulder" ctrlrange="-2.6 2.6"/>
+    <position name="a_elbow"    joint="elbow"    ctrlrange="-2.8 2.8"/>
+    <position name="a_wrist"    joint="wrist"    ctrlrange="-2.8 2.8"/>
+    <position name="a_lgrip"    joint="lgrip"    ctrlrange="0 0.04" kp="500"/>
+    <position name="a_rgrip"    joint="rgrip"    ctrlrange="0 0.04" kp="500"/>
+  </actuator>
+</mujoco>
