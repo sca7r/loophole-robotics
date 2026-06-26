@@ -1,6 +1,6 @@
 # Loophole Arm
 
-Part of [Loophole Robotics](../README.md) · A [Helix](https://github.com/helix) product.
+Part of [Loophole Robotics](../README.md) · A [Helix] product.
 
 A simulated robot arm that optimizes an open-loop trajectory to lift a cup, 
 using a plain NumPy evolution strategy in MuJoCo. The catch: the optimizer
