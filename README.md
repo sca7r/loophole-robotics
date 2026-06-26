@@ -1,6 +1,6 @@
 # Loophole Robotics
 
-A product by [Helix].
+A product by Helix.
 
 Loophole Robotics explores what happens when you give an optimizer a reward function
 and get out of the way. Physics simulation, evolution strategies, and eventually real
