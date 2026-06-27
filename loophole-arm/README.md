@@ -8,7 +8,7 @@
 LeRobot-compatible 6-DOF Feetech-servo manipulator with a MuJoCo-based
 reward-hacking demonstration suite.
 
-Part of [Loophole Robotics](../README.md), a product by [Helix](https://github.com/helix).
+Part of [Loophole Robotics](../README.md), a product by Helix.
 
 ---
 
