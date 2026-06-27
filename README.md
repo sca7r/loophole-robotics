@@ -2,11 +2,14 @@
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A robotics product by Helix. Loophole Robotics
-explores what happens when you give a robot a reward function and get out of
-the way, physics simulation, evolution strategies, and eventually real
-hardware, all built around one idea: **the optimizer will always find the
-loophole.**
+A robotics product by [Helix](https://github.com/helix). Builds on top of
+the open-source stack — [LeRobot](https://github.com/huggingface/lerobot),
+[MuJoCo](https://github.com/google-deepmind/mujoco),
+[MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie) —
+rather than reinventing it.
+
+The flagship application is **Loophole Arm**: a LeRobot-compatible 6-DOF
+Feetech-servo manipulator with a reward-hacking sim suite.
 
 ---
 
@@ -14,23 +17,18 @@ loophole.**
 
 | App | Description | Status |
 | --- | --- | --- |
-| [`loophole-arm`](./loophole-arm) | Reward-hacking on a UR5e + Robotiq 2F-85 in MuJoCo | 🟢 Active |
+| [`loophole-arm`](./loophole-arm) | LeRobot-compatible 6-DOF Feetech arm + MuJoCo reward-hacking sim | 🟢 Active |
 
 ---
 
-## Repository layout
+## Docs
 
-```
-loophole-robotics/
-├── loophole-arm/      # Application: cup-lift, evolution strategy, reward registry
-├── shared/            # Common utilities, scenes, configs reused across apps
-├── LICENSE
-└── README.md
-```
-
-Each application is a self-contained Python project with its own dependencies,
-tests, CI, and CLI. Code shared between two or more apps moves into `shared/`
-and is referenced as a path-installed dependency.
+| | |
+| --- | --- |
+| [HARDWARE_COSTS.md](./docs/HARDWARE_COSTS.md) | Honest hardware costs per capability tier ($1.5 k–$30 k+) |
+| [INDUSTRIAL_DEPLOYMENT.md](./docs/INDUSTRIAL_DEPLOYMENT.md) | Production deployment guide |
+| [AI_AGENTS.md](./docs/AI_AGENTS.md) | Imitation learning roadmap (BC → DAgger → Diffusion → VLA) |
+| [WORKFLOW.md](./docs/WORKFLOW.md) | Day-to-day developer workflow |
 
 ---
 
@@ -39,7 +37,7 @@ and is referenced as a path-installed dependency.
 ```
 Helix
 └── Loophole Robotics
-    └── Loophole Arm
+    └── Loophole Arm    ← LeRobot plugin + MuJoCo sim
 ```
 
 ---

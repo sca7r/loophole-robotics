@@ -1,100 +1,106 @@
 # Loophole Arm
 
-[![CI](https://github.com/sca7r/loophole-robotics/actions/workflows/ci.yml/badge.svg)](https://github.com/sca7r/loophole-robotics/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org)
+[![CI](https://github.com/helix/loophole-robotics/actions/workflows/ci.yml/badge.svg)](https://github.com/helix/loophole-robotics/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/loophole-arm)](https://pypi.org/project/loophole-arm/)
+[![Python](https://img.shields.io/pypi/pyversions/loophole-arm)](https://pypi.org/project/loophole-arm/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A reward-hacking demonstration on a production-quality UR5e + Robotiq 2F-85.
-The arm is asked to lift a cup; an evolution strategy optimises an open-loop
-trajectory; the catch is that the optimizer maximises *exactly* the reward you
-write, including any loophole it finds.
+LeRobot-compatible 6-DOF Feetech-servo manipulator with a MuJoCo-based
+reward-hacking demonstration suite.
 
-Part of [Loophole Robotics](../README.md), a product of Helix.
+Part of [Loophole Robotics](../README.md), a product by [Helix](https://github.com/helix).
 
 ---
 
-## Hardware in simulation
+## What it provides
 
-| Component | Source | DoF |
-| --- | --- | --- |
-| Universal Robots UR5e | [DeepMind MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie) | 6 |
-| Robotiq 2F-85 parallel gripper | DeepMind MuJoCo Menagerie | 1 (closure command) |
-| Free-body cup on a table | This project | — |
+```
+┌──────────────────────────────────────────────────────────────┐
+│  loophole_arm (this package)                                 │
+│  ─────────────────────────────                               │
+│  • Robot class    →  registered with LeRobot CLI             │
+│  • RobotConfig    →  registered as "loophole_arm"            │
+│  • MuJoCo sim     →  scene composition + rollout env         │
+│  • Reward funcs   →  reward-hacking demonstrations           │
+│  • ES optimizer   →  gradient-free policy search             │
+└──────────────────────────────────────────────────────────────┘
+       │ extends                              │ uses
+       ▼                                      ▼
+┌─────────────────┐                ┌────────────────────┐
+│ LeRobot (HF)    │                │ MuJoCo + numpy     │
+│ • teleop/record │                │ • physics & assets │
+│ • train ACT/Pi0 │                │                    │
+│ • Feetech bus   │                │                    │
+└─────────────────┘                └────────────────────┘
+```
 
-The combined model is composed at runtime with `mujoco.MjSpec`, no hand-edited
-XML, so the vendored Menagerie models stay drop-in replaceable.
+We deliberately don't reinvent what LeRobot does. Hardware control, dataset
+recording, teleoperation, and state-of-the-art policy training (ACT,
+Diffusion Policy, Pi0, SmolVLA, GR00T) all go through `lerobot`'s CLI with
+`--robot.type=loophole_arm`. This package adds the simulator and the
+research-grade reward-hacking tooling around it.
 
 ---
 
 ## Install
 
+### Sim only (CPU, no robot)
 ```bash
-git clone https://github.com/helix/loophole-robotics.git
-cd loophole-robotics/loophole-arm
-make fetch-assets   # vendors UR5e + 2F-85 under assets/menagerie/
-make dev            # installs the package + dev tools and registers hooks
+pip install loophole-arm
+make fetch-assets        # vendor UR5e + Robotiq from Menagerie
 ```
 
-Python 3.10+ required.
+### Real hardware (LeRobot + Feetech bus)
+```bash
+pip install "loophole-arm[hardware]"
+```
+
+### Development
+```bash
+git clone https://github.com/helix/loophole-robotics
+cd loophole-robotics/loophole-arm
+make dev fetch-assets
+```
+
+Requires **Python 3.10+** and Linux/macOS. For real hardware on Linux, your
+user must be in the `dialout` group.
 
 ---
 
 ## Quickstart
 
+### Inspect & optimize in sim
 ```bash
-# Inspect the composed scene
-make scene
-
-# Train with the naive (hackable) reward, watch the arm fling the cup
-make train-naive
-
-# Train with the shaped reward, the cup actually stays near the gripper
-make train-shaped
-
-# Render a result to MP4
-make render-naive
+loophole-arm-sim scene                                   # show the composed scene
+loophole-arm-sim optimize --reward shaped_lift           # train a trajectory in MuJoCo
+loophole-arm-sim render --params runs/.../best_params.npy --out demo.mp4
 ```
 
-Every run lands under `runs/<timestamp>_<reward>/`:
-
-```
-runs/20250101-120000_naive_peak_height/
-├── best_params.npy
-├── history.json
-├── config.json
-└── summary.json
-```
-
----
-
-## CLI
-
+### Drive the real arm (via LeRobot CLI — same robot type works for all commands)
 ```bash
-loophole-arm scene --inspect
-loophole-arm train  --config configs/naive.yaml
-loophole-arm train  --reward shaped_lift --generations 80 --seed 7
-loophole-arm render --params runs/.../best_params.npy --out movie.mp4
+# One-time servo bus setup
+lerobot-setup-motors --robot.type=loophole_arm --robot.port=/dev/ttyUSB0
+
+# Calibration (interactive)
+lerobot-calibrate    --robot.type=loophole_arm --robot.port=/dev/ttyUSB0
+
+# Teleop from a leader arm
+lerobot-teleoperate  --robot.type=loophole_arm --robot.port=/dev/ttyUSB0 \
+                     --teleop.type=so100_leader --teleop.port=/dev/ttyUSB1
+
+# Record demonstrations (uploaded to HF Hub by default)
+lerobot-record       --robot.type=loophole_arm --robot.port=/dev/ttyUSB0 \
+                     --dataset.repo_id=<user>/my-demos --dataset.num_episodes=50
+
+# Train an ACT policy on those demos
+lerobot-train --policy=act --dataset.repo_id=<user>/my-demos
 ```
 
----
-
-## Configuration
-
-Configs are typed YAML loaded into Python dataclasses. Override on the CLI
-without editing files:
-
-```yaml
-# configs/naive.yaml
-reward: naive_peak_height
-env:
-  n_waypoints: 6
-  sim_seconds: 3.0
-optimizer:
-  population: 32
-  elite: 8
-  sigma: 0.6
-  generations: 60
-  seed: 1
+### Docker
+```bash
+make docker-build
+docker run --rm --device=/dev/ttyUSB0 loophole-arm:dev \
+    lerobot-record --robot.type=loophole_arm --robot.port=/dev/ttyUSB0 ...
 ```
 
 ---
@@ -103,63 +109,109 @@ optimizer:
 
 ```
 src/loophole_arm/
-├── scene.py        # MjSpec composition: UR5e + 2F-85 + table + cup
-├── env.py          # CupLiftEnv: deterministic rollout, structured result
-├── rewards.py      # Reward registry, each fn: RolloutResult -> float
-├── optimizer.py    # EvolutionStrategy: gradient-free, NumPy only
-├── renderer.py     # Headless MP4 rendering (OSMesa)
-├── config.py       # Typed configs + YAML loader
-├── cli.py          # Sub-commands: train | render | scene
-└── logging_setup.py
+├── robot.py            LeRobot Robot subclass wrapping FeetechMotorsBus
+├── robot_config.py     LeRobot RobotConfig, registered as "loophole_arm"
+├── sim/
+│   ├── scene.py        MuJoCo scene composition (Feetech / UR5e + cup)
+│   ├── env.py          Deterministic rollout environment
+│   └── renderer.py     Headless MP4 rendering
+├── rewards.py          Reward function registry
+├── optimizer.py        NumPy evolution strategy (gradient-free)
+├── sim_cli.py          `loophole-arm-sim` CLI (sim only)
+└── _logging.py         Structured logging setup
 ```
 
-The four core abstractions are deliberately decoupled, swap the optimizer
-(e.g. for CMA-ES or PPO) without touching the environment, or swap the model
-(e.g. for a Franka) without touching the optimizer.
+The package is split deliberately:
+
+- The **sim layer** (`sim/`, `rewards.py`, `optimizer.py`) has no LeRobot
+  dependency — it imports cleanly without the `[hardware]` extra. Useful
+  on CI and on machines without a Feetech bus.
+- The **hardware layer** (`robot.py`, `robot_config.py`) is lazy-imported.
+  Only loads `lerobot.motors.feetech` when actually used.
 
 ---
 
-## Reward functions
-
-| Name | Definition | Behaviour |
-| --- | --- | --- |
-| `naive_peak_height` | `peak cup z` | Flings the cup upward |
-| `shaped_lift` | `final z × exp(-10·dist)` | Holds the cup near the gripper |
-| `strict_grasp` | `shaped_lift + contact bonus − motion penalty` | Stays in contact, less wobble |
-
-Add a new reward by writing `def my_reward(r: RolloutResult) -> float:` in
-`rewards.py` and registering it in `REGISTRY`. It's available everywhere.
-
----
-
-## Testing
+## Tests
 
 ```bash
-make test       # pytest
-make lint       # ruff
-make typecheck  # mypy --strict
+make test            # all sim tests
+make test-cov        # with coverage report
+make typecheck       # mypy --strict
+make lint            # ruff
+make pre-commit      # everything via pre-commit
+```
+
+Hardware-in-the-loop tests are marked `@pytest.mark.hardware` and skip
+unless a real arm is on `/dev/ttyUSB0`. They're not run in CI.
+
+---
+
+## Configuration
+
+The Loophole Arm is a standard LeRobot `RobotConfig` subclass:
+
+```python
+from loophole_arm import LoopholeArm, LoopholeArmConfig
+
+cfg = LoopholeArmConfig(
+    port="/dev/ttyUSB0",
+    disable_torque_on_disconnect=True,
+    max_relative_target=10.0,         # degrees per tick — velocity-limit safety
+    use_degrees=True,
+)
+arm = LoopholeArm(cfg)
+arm.connect()
+obs = arm.get_observation()
+arm.send_action({"shoulder_pan.pos": 0.0, ...})
+arm.disconnect()
+```
+
+For YAML config in `lerobot-record`, just point `--robot.type=loophole_arm`
+and pass the corresponding `--robot.port`, `--robot.id` etc.
+
+---
+
+## Sim reward hacking — the research tooling
+
+Three rewards demonstrate how the optimizer exploits whatever you write:
+
+| Reward | Behaviour |
+|---|---|
+| `naive_peak_height` | Optimizer learns to fling the cup (height ↑, holding ↓) |
+| `shaped_lift` | Cup must end near the gripper — flinging stops |
+| `strict_grasp` | Adds contact-time bonus + motion penalty — cleanest motion |
+
+This isn't a toy — it's a calibration check: before deploying a policy, run
+the optimizer against your reward to surface edge cases.
+
+```bash
+loophole-arm-sim optimize --reward strict_grasp --generations 100
 ```
 
 ---
 
-## Sim → real path
+## Hardware costs
 
-1. **Tune in sim** — thousands of rollouts cost nothing and break nothing.
-2. **Swap the model** — `SceneConfig` and `scene.build_spec` are the only
-   touchpoints. Drop a different Menagerie arm in and adjust ranges.
-3. **Close the loop** — open-loop trajectories will not survive contact with
-   real hardware. Add proprioceptive or visual feedback at minimum.
-4. **Domain randomization** — vary friction, mass, cup position in sim.
-5. **Hardware** — a real UR5e or a lower-cost open-source arm
-   (e.g. [LeRobot SO-101](https://github.com/huggingface/lerobot)) can replay
-   the optimised trajectory after appropriate safety review.
+See [../docs/HARDWARE_COSTS.md](../docs/HARDWARE_COSTS.md) for the honest
+breakdown. TL;DR: **$1.5 k–$3 k per deployment cell**, **$4 k–$7 k for a
+training workstation**. Anything beyond Tier 2 is research/SOTA chasing and
+not required for shipping.
 
-> Real arms move fast. Test at reduced torque/speed with an e-stop in reach
-> before running any optimizer-found trajectory.
+---
+
+## Industrial deployment
+
+See [../docs/INDUSTRIAL_DEPLOYMENT.md](../docs/INDUSTRIAL_DEPLOYMENT.md) for:
+
+- 15-minute new-cell bringup checklist
+- Safety requirements (hardware, software, operational)
+- Observability stack
+- Rollback procedure
+- When to add ROS 2 (and when not to)
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Vendored robot models from DeepMind MuJoCo
-Menagerie are redistributed under their original Apache 2.0 licenses.
+MIT — see [LICENSE](LICENSE). Vendored MuJoCo Menagerie models stay under
+their original Apache 2.0 licenses.
