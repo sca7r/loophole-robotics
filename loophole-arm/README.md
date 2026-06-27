@@ -34,8 +34,7 @@ Part of [Loophole Robotics](../README.md), a product by Helix.
 └─────────────────┘                └────────────────────┘
 ```
 
-We deliberately don't reinvent what LeRobot does. Hardware control, dataset
-recording, teleoperation, and state-of-the-art policy training (ACT,
+Hardware control, dataset recording, teleoperation, and state-of-the-art policy training (ACT,
 Diffusion Policy, Pi0, SmolVLA, GR00T) all go through `lerobot`'s CLI with
 `--robot.type=loophole_arm`. This package adds the simulator and the
 research-grade reward-hacking tooling around it.
