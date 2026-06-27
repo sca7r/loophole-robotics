@@ -187,26 +187,7 @@ the optimizer against your reward to surface edge cases.
 loophole-arm-sim optimize --reward strict_grasp --generations 100
 ```
 
----
 
-## Hardware costs
-
-See [../docs/HARDWARE_COSTS.md](../docs/HARDWARE_COSTS.md) for the honest
-breakdown. TL;DR: **$1.5 k–$3 k per deployment cell**, **$4 k–$7 k for a
-training workstation**. Anything beyond Tier 2 is research/SOTA chasing and
-not required for shipping.
-
----
-
-## Industrial deployment
-
-See [../docs/INDUSTRIAL_DEPLOYMENT.md](../docs/INDUSTRIAL_DEPLOYMENT.md) for:
-
-- 15-minute new-cell bringup checklist
-- Safety requirements (hardware, software, operational)
-- Observability stack
-- Rollback procedure
-- When to add ROS 2 (and when not to)
 
 ---
 
