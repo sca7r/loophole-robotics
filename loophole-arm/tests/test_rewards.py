@@ -1,10 +1,11 @@
 """Tests for reward functions."""
+
 from __future__ import annotations
 
 import numpy as np
 
-from loophole_arm.env import RolloutResult
 from loophole_arm.rewards import REGISTRY, naive_peak_height, shaped_lift, strict_grasp
+from loophole_arm.sim.env import RolloutResult
 
 
 def _make(

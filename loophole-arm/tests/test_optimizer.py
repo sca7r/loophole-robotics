@@ -1,4 +1,5 @@
 """Tests for the evolution strategy."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -44,4 +45,5 @@ def test_callback_receives_generation_info() -> None:
     # sigma should be monotonically decreasing
     sigmas = [t[2] for t in seen]
     from itertools import pairwise
+
     assert all(a >= b for a, b in pairwise(sigmas))

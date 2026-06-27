@@ -1,0 +1,17 @@
+# requirements-hardware.txt — additional deps for real Feetech arm control.
+#
+# Install alongside the base requirements:
+#   pip install -r requirements.txt -r requirements-hardware.txt
+#
+# What this adds:
+#   • lerobot — CLI (teleoperate, record, train), Feetech bus driver,
+#                dataset format, ACT/Diffusion/SmolVLA policies
+#
+# NOTE: lerobot pulls ~30 transitive deps (torch, torchvision, etc.).
+#       If you only need the sim, skip this file entirely.
+
+lerobot==0.5.1
+
+# Feetech serial bus (bundled inside lerobot[feetech]).
+# Already handled by `pip install lerobot` — listed here for clarity.
+# scservo-sdk>=0.1.0   # vendored by lerobot; do not install separately

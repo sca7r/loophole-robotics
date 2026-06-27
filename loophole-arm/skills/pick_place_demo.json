@@ -1,0 +1,127 @@
+{
+  "format_version": "1.0",
+  "name": "pick_place_demo",
+  "arm": "feetech",
+  "control_hz": 20.0,
+  "created": "2026-06-27T19:41:26.943895+00:00",
+  "waypoints": [
+    {
+      "kind": "joint",
+      "joints": [
+        0.0,
+        -0.5,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": null,
+      "gripper": null,
+      "duration": 1.5,
+      "label": "home"
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.18,
+        0.08,
+        0.18
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": "above pick"
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.18,
+        0.08,
+        0.12
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": "descend"
+    },
+    {
+      "kind": "gripper",
+      "joints": null,
+      "position": null,
+      "gripper": 1.0,
+      "duration": 1.5,
+      "label": "grasp"
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.18,
+        0.08,
+        0.18
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": "lift"
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.18,
+        -0.08,
+        0.18
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": "above place"
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.18,
+        -0.08,
+        0.12
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": "descend"
+    },
+    {
+      "kind": "gripper",
+      "joints": null,
+      "position": null,
+      "gripper": 0.0,
+      "duration": 1.5,
+      "label": "release"
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.18,
+        -0.08,
+        0.18
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": "retract"
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        0.0,
+        -0.5,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": null,
+      "gripper": null,
+      "duration": 1.5,
+      "label": "home"
+    }
+  ]
+}

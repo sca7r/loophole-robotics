@@ -1,9 +1,10 @@
 """Shared pytest fixtures."""
+
 from __future__ import annotations
 
 import pytest
 
-from loophole_arm.env import CupLiftEnv
+from loophole_arm.sim.env import CupLiftEnv
 
 
 @pytest.fixture(scope="session")

@@ -4,6 +4,7 @@ A clean separation from :mod:`loophole_arm.env` and :mod:`loophole_arm.rewards`
 makes it trivial to swap in CMA-ES, PPO, or any other optimizer later without
 touching the environment.
 """
+
 from __future__ import annotations
 
 import logging

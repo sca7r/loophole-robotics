@@ -1,9 +1,10 @@
 """Tests for the rollout environment."""
+
 from __future__ import annotations
 
 import numpy as np
 
-from loophole_arm.env import CupLiftEnv, RolloutResult
+from loophole_arm.sim.env import CupLiftEnv, RolloutResult
 
 
 def test_param_dim_matches_actuators_times_waypoints(env: CupLiftEnv) -> None:

@@ -4,12 +4,13 @@ Each reward consumes a :class:`RolloutResult` and returns a scalar score that
 the optimizer maximises. The naming reflects what each reward measures, not
 how it behaves — the whole project is about discovering how each one fails.
 """
+
 from __future__ import annotations
 
 import math
 from collections.abc import Callable
 
-from loophole_arm.env import RolloutResult
+from loophole_arm.sim.env import RolloutResult
 
 RewardFn = Callable[[RolloutResult], float]
 

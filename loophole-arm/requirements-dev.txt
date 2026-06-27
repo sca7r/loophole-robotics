@@ -1,0 +1,16 @@
+# requirements-dev.txt — development tooling.
+#
+# Install alongside the base requirements:
+#   pip install -r requirements.txt -r requirements-dev.txt
+#
+# Or use the Makefile shortcut:
+#   make dev
+
+pytest==9.1.1
+pytest-cov==7.1.0
+ruff==0.15.20
+mypy==2.1.0
+pre-commit==3.7.0
+
+# Optional: rich test output
+# pytest-rich>=0.1.1

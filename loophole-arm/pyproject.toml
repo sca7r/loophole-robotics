@@ -1,35 +1,46 @@
 [build-system]
-requires = ["hatchling>=1.18"]
+requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
 name = "loophole-arm"
 dynamic = ["version"]
-description = "Reward-hacking demo on a UR5e + Robotiq 2F-85 in MuJoCo."
+description = "LeRobot-compatible 6-DOF Feetech-servo arm + MuJoCo reward-hacking sim."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [{ name = "Helix" }]
-keywords = ["robotics", "mujoco", "reinforcement-learning", "simulation"]
+keywords = ["robotics", "mujoco", "lerobot", "feetech", "industrial"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Science/Research",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Manufacturing",
   "License :: OSI Approved :: MIT License",
+  "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+
+# Core: just the sim layer + the small set of utilities the robot wrapper needs.
+# `lerobot` itself is an optional extra so the sim can run without it.
 dependencies = [
   "mujoco>=3.2",
   "numpy>=1.26",
   "imageio>=2.34",
   "imageio-ffmpeg>=0.5",
   "pyyaml>=6.0",
+  "mink>=1.1",
+  "qpsolvers[daqp]>=4.0",
 ]
 
 [project.optional-dependencies]
+# Real hardware: pulls LeRobot with Feetech bus support.
+hardware = ["lerobot[feetech]>=0.5"]
+
+# Development tooling.
 dev = [
   "pytest>=8.0",
   "pytest-cov>=5.0",
@@ -38,28 +49,40 @@ dev = [
   "pre-commit>=3.7",
 ]
 
+# Convenience: everything.
+all = ["loophole-arm[hardware,dev]"]
+
 [project.scripts]
-loophole-arm = "loophole_arm.cli:main"
+# Sim-only CLI. The real-arm CLI is `lerobot` itself once `[hardware]` is installed.
+loophole-arm-sim = "loophole_arm.sim_cli:main"
+# Teach-and-repeat product CLI.
+loophole-arm-teach = "loophole_arm.teach.cli:main"
+
+[project.entry-points."lerobot.robots"]
+# Auto-discovery hook: LeRobot picks up our robot when the package is installed.
+loophole_arm = "loophole_arm.robot:LoopholeArm"
 
 [project.urls]
-Homepage = "https://github.com/helix/loophole-robotics"
-Issues   = "https://github.com/helix/loophole-robotics/issues"
+Homepage      = "https://github.com/helix/loophole-robotics"
+Issues        = "https://github.com/helix/loophole-robotics/issues"
+Changelog     = "https://github.com/helix/loophole-robotics/blob/main/loophole-arm/CHANGELOG.md"
+Documentation = "https://github.com/helix/loophole-robotics#readme"
 
 [tool.hatch.version]
 path = "src/loophole_arm/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/loophole_arm"]
-# Vendor menagerie assets into the wheel so the package is self-contained
-artifacts = ["assets/menagerie/**/*"]
+artifacts = ["assets/feetech_arm/**/*"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src", "assets/menagerie", "configs", "tests", "README.md", "LICENSE"]
+include = ["src", "assets/feetech_arm", "configs", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
 
 # ── Tooling ────────────────────────────────────────────────────────────────
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+extend-exclude = ["assets", "viewer.py", "check_setup.py"]
 
 [tool.ruff.lint]
 select = [
@@ -69,17 +92,25 @@ select = [
   "UP",            # pyupgrade
   "N",             # pep8-naming
   "SIM",           # flake8-simplify
+  "RUF",           # ruff-specific
 ]
-ignore = ["E501"]  # line length handled by formatter
+ignore = [
+  "E501",          # handled by formatter
+  "N802",          # ROS/LeRobot use mixedCase method names
+]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["B018"]
+"tests/*" = ["B018", "RUF059", "SLF001"]
+"src/loophole_arm/robot.py" = ["PLC0415"]
+"viewer.py" = ["E402"]  # intentional sys.path before imports
+"check_setup.py" = ["F401"]  # import-for-existence checks  # late imports for optional deps
 
 [tool.mypy]
 python_version = "3.10"
 strict = true
 ignore_missing_imports = true
 warn_unused_ignores = true
+exclude = ["assets", "build", "dist"]
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -88,4 +119,23 @@ testpaths = ["tests"]
 filterwarnings = [
   "ignore::DeprecationWarning",
   "ignore::UserWarning:mujoco",
+]
+markers = [
+  "hardware: tests that need a real Feetech arm on /dev/ttyUSB0 (skipped in CI)",
+  "slow: tests that take >5 seconds",
+]
+
+[tool.coverage.run]
+source = ["loophole_arm"]
+branch = true
+omit = ["*/sim_cli.py", "*/__main__.py"]
+
+[tool.coverage.report]
+fail_under = 75
+show_missing = true
+exclude_lines = [
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
 ]

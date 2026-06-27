@@ -1,0 +1,134 @@
+{
+  "format_version": "1.0",
+  "name": "my_first_skill",
+  "arm": "feetech",
+  "control_hz": 20.0,
+  "created": "2026-06-27T19:48:42.209928+00:00",
+  "waypoints": [
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.2,
+        0.0,
+        0.25
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        0.0,
+        -0.5,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": null,
+      "gripper": null,
+      "duration": 1.5,
+      "label": "home"
+    },
+    {
+      "kind": "gripper",
+      "joints": null,
+      "position": null,
+      "gripper": 0.0,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.2,
+        0.0,
+        0.3
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "gripper",
+      "joints": null,
+      "position": null,
+      "gripper": 1.0,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        0.0,
+        -0.5,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": null,
+      "gripper": null,
+      "duration": 1.5,
+      "label": "home"
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.1,
+        0.2,
+        0.3
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.1,
+        0.1,
+        0.1
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "gripper",
+      "joints": null,
+      "position": null,
+      "gripper": 0.0,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "gripper",
+      "joints": null,
+      "position": null,
+      "gripper": 1.0,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "joint",
+      "joints": [
+        0.0,
+        -0.5,
+        1.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "position": null,
+      "gripper": null,
+      "duration": 1.5,
+      "label": "home"
+    }
+  ]
+}

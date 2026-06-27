@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+defaults:
+  run:
+    working-directory: loophole-arm
+
+permissions:
+  contents: write
+  id-token: write     # trusted publishing to PyPI
+  attestations: write
+
+jobs:
+  build-publish:
+    name: Build & publish to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/loophole-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify tag matches package version
+        run: |
+          PKG_VERSION=$(python -c "import re; print(re.search(r'__version__ = \"([^\"]+)\"', open('src/loophole_arm/_version.py').read()).group(1))")
+          TAG=${GITHUB_REF#refs/tags/v}
+          if [ "$PKG_VERSION" != "$TAG" ]; then
+            echo "::error::Tag $TAG does not match package version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Build distributions
+        run: |
+          pip install build
+          python -m build
+
+      - name: Generate provenance attestation
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: loophole-arm/dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: loophole-arm/dist/
+          attestations: true
+
+  github-release:
+    name: Create GitHub release
+    needs: [build-publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/loophole-arm/CHANGELOG.md).
