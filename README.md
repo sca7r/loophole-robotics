@@ -3,10 +3,10 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.3.0-blue)](./loophole-arm/CHANGELOG.md)
 
-A robotics product by [Helix](https://github.com/helix). Builds on the
+A robotics product by Helix. Builds on the
 open-source stack — [LeRobot](https://github.com/huggingface/lerobot),
 [MuJoCo](https://github.com/google-deepmind/mujoco),
-[mink](https://github.com/kevinzakka/mink) (IK) — rather than reinventing it.
+[mink](https://github.com/kevinzakka/mink) (IK).
 
 The flagship application is **Loophole Arm**: a 6-DOF Feetech-servo manipulator
 with a layered control stack, a software safety layer, and a sim-to-real design
@@ -18,7 +18,7 @@ that lets skills taught in simulation run on hardware unchanged.
 
 | Product | Description | Status |
 | --- | --- | --- |
-| **`loophole-arm teach`** | Teach-and-repeat by waypoints — teach in sim, replay on hardware later | 🟢 Built |
+| **`loophole-arm teach`** | Teach-and-repeat by waypoints: teach in sim, replay on hardware later | 🟢 Built |
 | **`loophole-arm vision`** | Camera-guided manipulation | ⚪ Planned |
 | reward-hacking sim suite | The original research demo (evolution strategy + reward hacking) | 🟢 Active |
 
