@@ -26,7 +26,6 @@ import sys
 from loophole_arm._logging import configure_logging
 from loophole_arm.control.controller import RobotController
 from loophole_arm.control.kinematics import TCPSolver
-from loophole_arm.control.workcell import TCP_SITE
 from loophole_arm.server.remote_backend import RemoteBackend
 
 logger = logging.getLogger("loophole_arm.teleop")
@@ -69,13 +68,18 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Connected. n_arm_joints = {backend.n_arm_joints}")
 
     # Build the local IK solver against the kinematic model the server sent.
-    arm_joint_names = ["Joint_1", "Joint_2", "Joint_3", "Joint_4", "Joint_5", "Joint_6"]
+    # The server reports the *prefixed* joint/site names (e.g. "arm/Joint_1",
+    # "arm/tcp"), so the same client works for any robot endpoint regardless of
+    # how the scene was named.
     try:
         model = backend.kinematic_model()
     except RuntimeError:
         print("ERROR: server did not send a kinematic model; cannot run IK teleop.")
         return 2
-    solver = TCPSolver(model, TCP_SITE, arm_joint_names=arm_joint_names)
+    if not backend.arm_joint_names or not backend.tcp_site:
+        print("ERROR: server did not report arm joint names / TCP site.")
+        return 2
+    solver = TCPSolver(model, backend.tcp_site, arm_joint_names=backend.arm_joint_names)
     controller = RobotController(backend=backend, solver=solver, control_hz=20.0)
     controller.enable()
 

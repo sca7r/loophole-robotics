@@ -8,7 +8,7 @@
 LeRobot-compatible 6-DOF Feetech-servo manipulator with a MuJoCo-based
 reward-hacking demonstration suite.
 
-Part of [Loophole Robotics](../README.md), a product by [Helix](https://github.com/Helix-AI-Robotics).
+Part of [Loophole Robotics](../README.md), a product by [Helix](https://github.com/helix).
 
 ---
 
@@ -76,7 +76,7 @@ loophole-arm-sim optimize --reward shaped_lift           # train a trajectory in
 loophole-arm-sim render --params runs/.../best_params.npy --out demo.mp4
 ```
 
-### Drive the real arm (via LeRobot CLI — same robot type works for all commands)
+### Drive the real arm (via LeRobot CLI, same robot type works for all commands)
 ```bash
 # One-time servo bus setup
 lerobot-setup-motors --robot.type=loophole_arm --robot.port=/dev/ttyUSB0
@@ -124,7 +124,7 @@ src/loophole_arm/
 The package is split deliberately:
 
 - The **sim layer** (`sim/`, `rewards.py`, `optimizer.py`) has no LeRobot
-  dependency — it imports cleanly without the `[hardware]` extra. Useful
+  dependency, it imports cleanly without the `[hardware]` extra. Useful
   on CI and on machines without a Feetech bus.
 - The **hardware layer** (`robot.py`, `robot_config.py`) is lazy-imported.
   Only loads `lerobot.motors.feetech` when actually used.
@@ -171,43 +171,22 @@ and pass the corresponding `--robot.port`, `--robot.id` etc.
 
 ---
 
-## Sim reward hacking — the research tooling
+## Sim reward hacking, the research tooling
 
 Three rewards demonstrate how the optimizer exploits whatever you write:
 
 | Reward | Behaviour |
 |---|---|
 | `naive_peak_height` | Optimizer learns to fling the cup (height ↑, holding ↓) |
-| `shaped_lift` | Cup must end near the gripper — flinging stops |
-| `strict_grasp` | Adds contact-time bonus + motion penalty — cleanest motion |
+| `shaped_lift` | Cup must end near the gripper, flinging stops |
+| `strict_grasp` | Adds contact-time bonus + motion penalty, cleanest motion |
 
-This isn't a toy — it's a calibration check: before deploying a policy, run
+Calibration check: before deploying a policy, run
 the optimizer against your reward to surface edge cases.
 
 ```bash
 loophole-arm-sim optimize --reward strict_grasp --generations 100
 ```
-
----
-
-## Hardware costs
-
-See [../docs/HARDWARE_COSTS.md](../docs/HARDWARE_COSTS.md) for the honest
-breakdown. TL;DR: **$1.5 k–$3 k per deployment cell**, **$4 k–$7 k for a
-training workstation**. Anything beyond Tier 2 is research/SOTA chasing and
-not required for shipping.
-
----
-
-## Industrial deployment
-
-See [../docs/INDUSTRIAL_DEPLOYMENT.md](../docs/INDUSTRIAL_DEPLOYMENT.md) for:
-
-- 15-minute new-cell bringup checklist
-- Safety requirements (hardware, software, operational)
-- Observability stack
-- Rollback procedure
-- When to add ROS 2 (and when not to)
 
 ---
 

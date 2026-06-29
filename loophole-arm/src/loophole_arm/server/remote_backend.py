@@ -73,6 +73,11 @@ class RemoteBackend(RobotInterface):
         self._n_arm_joints = 0
         self._kinematic_model: mujoco.MjModel | None = None
         self._model_path = ""
+        # Prefixed names the server reports on hello — clients use these to wire
+        # a local IK solver against the same names the server is driving.
+        self.arm_joint_names: list[str] = []
+        self.gripper_actuator: str = ""
+        self.tcp_site: str = ""
 
     # ── Lifecycle ───────────────────────────────────────────────────────
     def connect(self) -> None:
@@ -90,6 +95,9 @@ class RemoteBackend(RobotInterface):
         hello = self._call(Request(op="hello", robot=self.robot_name))
         self._n_arm_joints = int(hello["n_arm_joints"])
         self._model_path = str(hello.get("model_path", ""))
+        self.arm_joint_names = list(hello.get("arm_joint_names", []))
+        self.gripper_actuator = str(hello.get("gripper_actuator", ""))
+        self.tcp_site = str(hello.get("tcp_site", ""))
         if not versions_compatible(hello.get("version", "0.0")):
             raise RemoteConnectionError(
                 f"server protocol {hello.get('version')} incompatible with client {PROTOCOL_VERSION}"

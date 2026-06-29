@@ -208,10 +208,19 @@ class SimServer:
         if ep is None:
             return Response(ok=False, error=f"unknown robot {req.robot!r}; "
                                             f"available: {sorted(self.endpoints.keys())}")
+        # Walk through any decorators (e.g. SafetyBackend) to the concrete backend,
+        # which carries the prefixed joint/site/actuator names the client needs to
+        # build a local IK solver. The decorators don't add or change these names.
+        inner = ep.backend
+        while hasattr(inner, "_inner"):
+            inner = inner._inner
         return Response(ok=True, value={
             "version": PROTOCOL_VERSION,
             "n_arm_joints": ep.backend.n_arm_joints,
             "model_path": self.model_path,
+            "arm_joint_names": list(getattr(inner, "arm_joint_names", [])),
+            "gripper_actuator": getattr(inner, "gripper_actuator", ""),
+            "tcp_site": getattr(inner, "tcp_site", ""),
         })
 
     # ── Physics loop ────────────────────────────────────────────────────

@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.4] — Helix brand assets
+
+### Added
+- **Helix logo assets** under `docs/brand/`: `helix-banner.jpeg` (banner with
+  wordmark, 1536×490), `helix-variants.png` (metallic / white / black /
+  app-icon reference sheet), `helix-mark.jpeg` (square icon, 306×290).
+- Root README now displays the Helix banner and links the org page
+  (https://github.com/Helix-AI-Robotics).
+
+### Changed
+- Version bump only; no behaviour changes, no code changes, no test changes.
+
+## [0.4.3] — bug fixes, teach-over-wire, friendlier docs
+
+### Fixed
+- **`loophole-arm-teleop` no longer crashes on connect.** After 0.4.1 switched
+  the server to the multi-arm builder (which prefixes joint names with the
+  endpoint name, e.g. ``arm/Joint_1``), the teleop client still had bare
+  joint names hardcoded and died in ``TCPSolver.__init__`` with
+  ``KeyError: 'Joint_1'``. The server now reports the prefixed
+  ``arm_joint_names``, ``tcp_site``, and ``gripper_actuator`` in its ``hello``
+  reply, and teleop uses them. Regression test in
+  ``tests/test_teleop_wiring.py``.
+
+### Added
+- **`loophole-arm-teach connect <robot>`** — teach a skill against a running
+  ``loophole-armd`` server. Same interactive prompt as ``loophole-arm-teach
+  teach``; only the backend differs (``RemoteBackend`` instead of in-process
+  ``SimBackend``). The shared loop is now in a single ``_interactive_loop``
+  helper so local and remote modes can't drift.
+- **`examples/scenes/README.md`** — full YAML schema reference with named
+  colors, the kind|size cheat-sheet, and a table of the shipped example files.
+
+### Changed
+- Root README rewritten as a "do this → see this" tutorial. Quick-start that
+  works in 5 minutes, followed by concrete recipes for teleop, teach, and
+  multi-arm scenes. No new content — just clearer ordering and copy-paste-
+  friendly snippets.
+
 ## [0.4.2] — YAML scene configuration, per-arm safety limits
 
 ### Added

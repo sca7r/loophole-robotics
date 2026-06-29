@@ -77,74 +77,133 @@ If the scene has reference axes turned on, you'll see them in the viewer:
 
 
 # ── teach (interactive) ──────────────────────────────────────────────────
+def _interactive_loop(
+    robot,
+    home: list[float],
+    session: TeachSession,
+    save_name: str | None,
+) -> str | None:
+    """The interactive teach loop. Backend-agnostic: works for both the local
+    ``make_sim_robot`` controller and a remote controller bound to ``loophole-armd``.
+    """
+    print(_INTERACTIVE_HELP)
+    saved_to: str | None = None
+    while True:
+        try:
+            line = input("teach> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not line:
+            continue
+        parts = line.split()
+        cmd = parts[0].lower()
+
+        if cmd == "done":
+            if save_name and saved_to is None:
+                saved_to = session.save(f"skills/{save_name}.json")
+            break
+        elif cmd == "help":
+            print(_INTERACTIVE_HELP)
+        elif cmd == "keys":
+            print(_COORDS_HELP)
+        elif cmd == "home":
+            session.teach_joints(home, label="home")
+        elif cmd == "cart" and len(parts) >= 4:
+            x, y, z = (float(parts[1]), float(parts[2]), float(parts[3]))
+            label = " ".join(parts[4:])
+            if not session.teach_cartesian(x, y, z, label=label):
+                print("  (unreachable or outside safety envelope — not recorded)")
+        elif cmd == "joints" and len(parts) >= 7:
+            j = [float(p) for p in parts[1:7]]
+            session.teach_joints(j, label=" ".join(parts[7:]))
+        elif cmd == "grip" and len(parts) >= 2:
+            session.teach_gripper(1.0 if parts[1] == "close" else 0.0, label=" ".join(parts[2:]))
+        elif cmd == "dwell" and len(parts) >= 2:
+            session.teach_dwell(float(parts[1]), label=" ".join(parts[2:]))
+        elif cmd == "undo":
+            if session.trajectory.waypoints:
+                session.trajectory.waypoints.pop()
+                print(f"  removed last waypoint ({len(session.trajectory)} remain)")
+        elif cmd == "list":
+            _print_waypoints(session.trajectory)
+        elif cmd == "where":
+            tcp = robot.backend.end_effector_pose()
+            joints = robot.backend.joint_positions
+            print(f"  TCP    : x={tcp[0]:+.3f}  y={tcp[1]:+.3f}  z={tcp[2]:+.3f}  metres")
+            print("  Joints : [" + ", ".join(f"{j:+.3f}" for j in joints) + "] rad")
+        elif cmd == "goto" and len(parts) >= 4:
+            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+            ok = robot.move_to(x, y, z, duration=1.5)
+            tcp = robot.backend.end_effector_pose()
+            if ok:
+                print(f"  arrived at ({tcp[0]:+.3f}, {tcp[1]:+.3f}, {tcp[2]:+.3f})  — not recorded")
+            else:
+                print("  (unreachable or outside safety envelope)")
+        elif cmd == "save" and len(parts) >= 2:
+            saved_to = session.save(f"skills/{parts[1]}.json")
+            print(f"  saved → {saved_to}")
+        else:
+            print("  ? type 'help' for commands")
+    return saved_to
+
+
 def cmd_teach(args: argparse.Namespace) -> int:
     robot, model, data, home = make_sim_robot(arm=args.arm)
     session = TeachSession(robot, name=args.name or "untitled", arm=args.arm)
 
     viewer_ctx = _maybe_viewer(model, data, robot)
     print(f"\nTeaching '{session.trajectory.name}' on the {args.arm} arm.")
-    print(_INTERACTIVE_HELP)
 
     with viewer_ctx:
         robot.home(home)
-        saved_to: str | None = None
-        while True:
-            try:
-                line = input("teach> ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            if not line:
-                continue
-            parts = line.split()
-            cmd = parts[0].lower()
+        saved_to = _interactive_loop(robot, home, session, save_name=args.name)
 
-            if cmd == "done":
-                if args.name and saved_to is None:
-                    saved_to = session.save(f"skills/{args.name}.json")
-                break
-            elif cmd == "help":
-                print(_INTERACTIVE_HELP)
-            elif cmd == "keys":
-                print(_COORDS_HELP)
-            elif cmd == "home":
-                session.teach_joints(home, label="home")
-            elif cmd == "cart" and len(parts) >= 4:
-                x, y, z = (float(parts[1]), float(parts[2]), float(parts[3]))
-                label = " ".join(parts[4:])
-                if not session.teach_cartesian(x, y, z, label=label):
-                    print("  (unreachable or outside safety envelope — not recorded)")
-            elif cmd == "joints" and len(parts) >= 7:
-                j = [float(p) for p in parts[1:7]]
-                session.teach_joints(j, label=" ".join(parts[7:]))
-            elif cmd == "grip" and len(parts) >= 2:
-                session.teach_gripper(1.0 if parts[1] == "close" else 0.0, label=" ".join(parts[2:]))
-            elif cmd == "dwell" and len(parts) >= 2:
-                session.teach_dwell(float(parts[1]), label=" ".join(parts[2:]))
-            elif cmd == "undo":
-                if session.trajectory.waypoints:
-                    session.trajectory.waypoints.pop()
-                    print(f"  removed last waypoint ({len(session.trajectory)} remain)")
-            elif cmd == "list":
-                _print_waypoints(session.trajectory)
-            elif cmd == "where":
-                tcp = robot.backend.end_effector_pose()
-                joints = robot.backend.joint_positions
-                print(f"  TCP    : x={tcp[0]:+.3f}  y={tcp[1]:+.3f}  z={tcp[2]:+.3f}  metres")
-                print("  Joints : [" + ", ".join(f"{j:+.3f}" for j in joints) + "] rad")
-            elif cmd == "goto" and len(parts) >= 4:
-                x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
-                ok = robot.move_to(x, y, z, duration=1.5)
-                tcp = robot.backend.end_effector_pose()
-                if ok:
-                    print(f"  arrived at ({tcp[0]:+.3f}, {tcp[1]:+.3f}, {tcp[2]:+.3f})  — not recorded")
-                else:
-                    print("  (unreachable or outside safety envelope)")
-            elif cmd == "save" and len(parts) >= 2:
-                saved_to = session.save(f"skills/{parts[1]}.json")
-                print(f"  saved → {saved_to}")
-            else:
-                print("  ? type 'help' for commands")
+    if saved_to:
+        print(f"\nSaved skill to {saved_to}")
+        print(f"Replay it with:  loophole-arm-teach play {saved_to}")
+    return 0
+
+
+def cmd_connect(args: argparse.Namespace) -> int:
+    """Teach a skill against a running ``loophole-armd`` server.
+
+    The sim runs in another terminal; this command opens an interactive
+    teach prompt that drives the named robot over the wire. Same prompt,
+    same commands as ``loophole-arm-teach teach`` — only the backend changes.
+    """
+    from loophole_arm.control.controller import RobotController
+    from loophole_arm.control.kinematics import TCPSolver
+    from loophole_arm.server.remote_backend import RemoteBackend
+
+    print(f"Connecting to {args.host}:{args.port} as {args.robot!r}...")
+    backend = RemoteBackend(args.robot, host=args.host, port=args.port)
+    backend.connect()
+    print(f"Connected. n_arm_joints = {backend.n_arm_joints}")
+
+    try:
+        model = backend.kinematic_model()
+    except RuntimeError:
+        print("ERROR: server did not send a kinematic model; cannot teach over the wire.")
+        return 2
+    if not backend.arm_joint_names or not backend.tcp_site:
+        print("ERROR: server did not report arm joint names / TCP site.")
+        return 2
+
+    solver = TCPSolver(model, backend.tcp_site, arm_joint_names=backend.arm_joint_names)
+    controller = RobotController(backend=backend, solver=solver, control_hz=20.0)
+    controller.enable()
+
+    # Generic home pose for Feetech-shaped arms. Avoids needing the server to
+    # publish a home pose, which it doesn't today.
+    home = [0.0, -0.5, 1.0, 0.0, 0.0, 0.0]
+    session = TeachSession(controller, name=args.name or "untitled", arm="feetech")
+
+    print(f"\nTeaching '{session.trajectory.name}' over the wire on robot {args.robot!r}.")
+    try:
+        saved_to = _interactive_loop(controller, home, session, save_name=args.name)
+    finally:
+        backend.disconnect()
 
     if saved_to:
         print(f"\nSaved skill to {saved_to}")
@@ -319,6 +378,14 @@ def build_parser() -> argparse.ArgumentParser:
     pd.add_argument("--arm", default="feetech", choices=["feetech", "ur5e"])
     pd.add_argument("--render", type=Path, help="Headless: render to this MP4")
     pd.set_defaults(func=cmd_demo)
+
+    pc = sub.add_parser("connect",
+                        help="Teach over the wire against a running loophole-armd")
+    pc.add_argument("robot", help="Name of the robot endpoint on the server (e.g. 'arm')")
+    pc.add_argument("--host", default="127.0.0.1")
+    pc.add_argument("--port", type=int, default=8765)
+    pc.add_argument("--name", help="Skill name (saved to skills/NAME.json on 'done')")
+    pc.set_defaults(func=cmd_connect)
 
     return p
 
