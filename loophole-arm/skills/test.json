@@ -1,0 +1,49 @@
+{
+  "format_version": "1.0",
+  "name": "test",
+  "arm": "feetech",
+  "control_hz": 20.0,
+  "created": "2026-06-29T06:25:21.856716+00:00",
+  "waypoints": [
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.2,
+        0.0,
+        0.15
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": "start"
+    },
+    {
+      "kind": "cartesian",
+      "joints": null,
+      "position": [
+        0.2,
+        0.1,
+        0.15
+      ],
+      "gripper": null,
+      "duration": 1.5,
+      "label": "above"
+    },
+    {
+      "kind": "gripper",
+      "joints": null,
+      "position": null,
+      "gripper": 0.0,
+      "duration": 1.5,
+      "label": ""
+    },
+    {
+      "kind": "gripper",
+      "joints": null,
+      "position": null,
+      "gripper": 1.0,
+      "duration": 1.5,
+      "label": ""
+    }
+  ]
+}
