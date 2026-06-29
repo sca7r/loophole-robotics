@@ -13,8 +13,14 @@ from loophole_arm.control.controller import RobotController
 from loophole_arm.control.kinematics import TCPSolver
 from loophole_arm.control.limits import SafetyLimits
 from loophole_arm.control.safety import SafetyBackend
+from loophole_arm.control.scene import Scene
 from loophole_arm.control.sim_backend import SimBackend
-from loophole_arm.control.workcell import TCP_SITE, WorkcellConfig, build_workcell_model
+from loophole_arm.control.workcell import (
+    TCP_SITE,
+    WorkcellConfig,
+    build_workcell_from_scene,
+    build_workcell_model,
+)
 
 # Per-arm wiring. ``arm_joints`` are the MuJoCo joint names (canonical order);
 # ``lerobot_motors`` are the matching LeRobot motor channels for hardware. The
@@ -43,6 +49,7 @@ def make_sim_robot(
     arm: str = "feetech",
     control_hz: float = 20.0,
     workcell: WorkcellConfig | None = None,
+    scene: Scene | None = None,
     safety: bool = True,
     limits: SafetyLimits | None = None,
 ) -> tuple[RobotController, mujoco.MjModel, mujoco.MjData, list[float]]:
@@ -54,6 +61,12 @@ def make_sim_robot(
 
     Parameters
     ----------
+    workcell:
+        Simple single-arm config. Builds a scene with one table.
+    scene:
+        Custom :class:`Scene` (composable: many tables, objects, axes, grid).
+        If provided, overrides ``workcell``. The arm is mounted on top of
+        ``scene.tables[0]`` if any tables exist, else at the origin.
     safety:
         Wrap the backend in a :class:`SafetyBackend` that enforces joint,
         velocity, and workspace limits. Default True. Set False only for the
@@ -64,16 +77,20 @@ def make_sim_robot(
     Returns
     -------
     (controller, model, data, home_pose)
-        ``controller`` is the API the command file uses; ``model``/``data``
-        are exposed for rendering or viewer attachment; ``home_pose`` is the
-        arm's rest configuration.
     """
     if arm not in _ARM_WIRING:
         raise ValueError(f"unknown arm {arm!r}; known: {sorted(_ARM_WIRING)}")
     wiring = _ARM_WIRING[arm]
 
-    cfg = workcell or WorkcellConfig(arm=arm)
-    model = build_workcell_model(cfg)
+    if scene is not None:
+        # Composable path: scene + arm mounted on first table (or floor).
+        mount_z = scene.tables[0].height if scene.tables else 0.0
+        model = build_workcell_from_scene(
+            scene, arm=arm, arm_mount_pos=(0.0, 0.0, mount_z),
+        )
+    else:
+        cfg = workcell or WorkcellConfig(arm=arm)
+        model = build_workcell_model(cfg)
     data = mujoco.MjData(model)
 
     home = wiring["home"]

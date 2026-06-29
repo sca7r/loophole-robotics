@@ -26,17 +26,53 @@ from loophole_arm.teach.trajectory import Trajectory
 logger = logging.getLogger("loophole_arm.teach")
 
 _INTERACTIVE_HELP = """
-Teaching commands (type and press enter):
-  cart X Y Z [label]   move TCP to (x,y,z) metres and record the waypoint
-  joints J1..J6 [label] move to absolute joint angles (radians) and record
-  grip open|close      actuate and record the gripper
-  dwell SECONDS        record a pause
-  home                 move to the home pose and record it
-  undo                 remove the last recorded waypoint
-  list                 show waypoints recorded so far
-  save NAME            save the skill to skills/NAME.json
-  help                 show this help
-  done                 finish (saves if a name was given) and exit
+╭─ Teaching commands ────────────────────────────────────────────────────╮
+│                                                                         │
+│  MOVING (and recording the move as a waypoint):                         │
+│    cart X Y Z [label]    move TCP to (x,y,z) metres                     │
+│         e.g.  cart 0.18 0.08 0.13 above pick                            │
+│    joints J1 J2 J3 J4 J5 J6 [label]   move to absolute joint angles    │
+│    home                  move to the home pose                          │
+│                                                                         │
+│  EXPLORING (move WITHOUT recording — try-before-buy):                   │
+│    goto X Y Z            preview-move to (x,y,z)                        │
+│    where                 print current TCP coords + joint angles        │
+│                                                                         │
+│  GRIPPER & TIMING:                                                      │
+│    grip open             open the gripper (and record it)               │
+│    grip close            close the gripper (and record it)              │
+│    dwell SECONDS         record a pause (e.g.  dwell 0.5)               │
+│                                                                         │
+│  MANAGING THE SKILL:                                                    │
+│    list                  show waypoints recorded so far                 │
+│    undo                  remove the last waypoint                       │
+│    save NAME             save to skills/NAME.json                       │
+│    done                  finish (saves if a name was given) and exit    │
+│                                                                         │
+│  HELP:                                                                  │
+│    help                  show this menu                                 │
+│    keys                  show coordinate system tip                     │
+│                                                                         │
+╰─────────────────────────────────────────────────────────────────────────╯
+
+Tip: try  where  to see where the gripper is, then  goto X Y Z  to explore
+a target before recording it with  cart X Y Z .
+"""
+
+_COORDS_HELP = """
+Coordinate system (right-handed, arm base at origin):
+
+   +X = forward (away from you, into the scene)
+   +Y = left (when facing the arm from the front)
+   +Z = up
+
+Useful ranges for the Feetech arm on the workbench:
+   X: 0.05 to 0.30 m    (5-30 cm forward of the arm base)
+   Y: -0.25 to 0.25 m   (left/right)
+   Z: 0.10 to 0.35 m    (table surface @ ~0.10 m, max reach ~0.35 m)
+
+If the scene has reference axes turned on, you'll see them in the viewer:
+   RED = +X     GREEN = +Y     BLUE = +Z
 """
 
 
@@ -69,6 +105,8 @@ def cmd_teach(args: argparse.Namespace) -> int:
                 break
             elif cmd == "help":
                 print(_INTERACTIVE_HELP)
+            elif cmd == "keys":
+                print(_COORDS_HELP)
             elif cmd == "home":
                 session.teach_joints(home, label="home")
             elif cmd == "cart" and len(parts) >= 4:
@@ -89,6 +127,19 @@ def cmd_teach(args: argparse.Namespace) -> int:
                     print(f"  removed last waypoint ({len(session.trajectory)} remain)")
             elif cmd == "list":
                 _print_waypoints(session.trajectory)
+            elif cmd == "where":
+                tcp = robot.backend.end_effector_pose()
+                joints = robot.backend.joint_positions
+                print(f"  TCP    : x={tcp[0]:+.3f}  y={tcp[1]:+.3f}  z={tcp[2]:+.3f}  metres")
+                print("  Joints : [" + ", ".join(f"{j:+.3f}" for j in joints) + "] rad")
+            elif cmd == "goto" and len(parts) >= 4:
+                x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                ok = robot.move_to(x, y, z, duration=1.5)
+                tcp = robot.backend.end_effector_pose()
+                if ok:
+                    print(f"  arrived at ({tcp[0]:+.3f}, {tcp[1]:+.3f}, {tcp[2]:+.3f})  — not recorded")
+                else:
+                    print("  (unreachable or outside safety envelope)")
             elif cmd == "save" and len(parts) >= 2:
                 saved_to = session.save(f"skills/{parts[1]}.json")
                 print(f"  saved → {saved_to}")

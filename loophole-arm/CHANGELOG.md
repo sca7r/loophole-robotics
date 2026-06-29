@@ -6,6 +6,103 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.2] — YAML scene configuration, per-arm safety limits
+
+### Added
+- **YAML scene configs.** `loophole-armd --scene path/to/cell.yaml` loads
+  arms + tables + objects + per-arm safety limits from a human-readable
+  config file. The YAML schema mirrors the in-code API one-to-one (no extra
+  abstractions). New module `server/config.py` with `load_scene_config()`.
+- **Per-arm safety limits.** Each arm can have its own `safety:` block in
+  the YAML: workspace envelope, max joint step, joint bounds, joint margin.
+  Arms that omit `safety:` fall back to `SafetyLimits.feetech_default()`.
+  Wired through `_build_endpoints(handles, per_arm_limits)` into each arm's
+  `SafetyBackend` — verified by `test_per_arm_limits_reach_safety_backend`.
+- **Three example YAML scenes** under `examples/scenes/`:
+  `single_arm.yaml`, `pickplace_dual.yaml`, `handoff_triple.yaml` (3 arms
+  laid out for a hand-off chain, each with its own workspace box).
+- **`tests/test_config.py`** — 11 tests covering: minimal config, dual-arm
+  with per-arm limits, scenes with tables/objects/colors, per-joint velocity
+  caps as lists, validation (missing fields, bad dimensions, missing file),
+  and an integration test that confirms YAML limits actually reach the
+  `SafetyBackend`.
+
+### Changed
+- `_build_endpoints(model, data, handles, per_arm_limits=None)` accepts an
+  optional per-arm limits dict. Default behaviour (no dict) unchanged.
+
+## [0.4.1] — true multi-arm support
+
+### Added
+- **True independent multi-arm scenes.** `loophole-armd --arm arm_a --arm arm_b`
+  now builds a scene with two physically distinct arms (14 actuated DoFs total),
+  laid out along X with one workbench per arm. Each arm has its own prefixed
+  joint/actuator/site namespace (e.g. ``arm_a/Joint_1`` vs ``arm_b/Joint_1``)
+  via ``MjSpec.attach``, so a SimBackend bound to one arm cannot affect the
+  other. Clients connecting to different endpoints control fully independent
+  robots that share the same simulation window.
+- `ArmInstance` and `ArmHandle` types in `control/workcell.py`; the new
+  `build_multi_arm_model(scene, arms)` returns the compiled model, the spec
+  (for XML serialisation), and one handle per arm with already-prefixed names.
+- `tests/test_multi_arm.py` — six tests covering: compiled-model integrity
+  with prefixed names, two-arm independence, validation of duplicate names
+  and slash characters, empty arm-list rejection, and single-arm-via-builder
+  parity.
+
+### Changed
+- `loophole-armd`'s `_build_endpoints` now takes `ArmHandle`s with prefixed
+  names instead of bare robot names. The CLI uses the multi-arm builder for
+  every case (the single-arm path goes through it too, simpler than branching).
+- `_save_model_for_clients` now writes meshes flat next to the XML, matching
+  how `MjSpec.attach` rewrites mesh file references (bare filenames, no
+  ``meshes/`` prefix). Remote clients can now load the kinematic model in
+  multi-arm scenes.
+
+## [0.4.0] — multi-terminal architecture, motor bridge, keyboard teleop
+
+### Added
+- **Server/client architecture (multi-terminal).** `loophole-armd` runs one
+  simulation that holds the MuJoCo window; clients connect from other
+  terminals to drive named robot endpoints. The wire protocol is the
+  `RobotInterface` surface serialised as line-delimited JSON, so the same
+  controller / IK / safety / teach code drives sim and remote backends
+  unchanged. New modules:
+  - `server/protocol.py` — versioned wire protocol (request/response,
+    compatibility check)
+  - `server/sim_server.py` — TCP listener + physics thread + per-client
+    handler threads, optional viewer
+  - `server/remote_backend.py` — `RemoteBackend(RobotInterface)`, drop-in
+    replacement for `SimBackend`/`HardwareBackend`
+  - `server/cli.py` — `loophole-armd` entry point
+- **`loophole-arm-teleop` — numpad keyboard teleoperation.** Drive the TCP
+  with the numpad (7/8/9 +Z/+Y/open, 4/5/6 -X/home/+X, 1/2/3 close/-Y/-Z),
+  with live coordinate display, configurable step sizes, e-stop and reset.
+  IK-driven, runs through the standard `RobotController` so safety is on.
+- **MotorMapper bridge** (`control/motor_mapper.py`). The structural seam
+  between software (radians, URDF kinematic frame) and motor (encoder counts,
+  calibration offsets, sign, per-tick velocity caps). Wired into
+  `HardwareBackend` reads and writes. Default calibration is a placeholder
+  (zero offsets) — real values get measured during bench bring-up.
+- **Friendlier teach prompt.** Boxed help banner grouped by intent (moving,
+  exploring, gripper, managing). New `keys` command prints the coordinate
+  system reference. `where` (print current TCP + joint angles) and `goto`
+  (preview-move without recording) shipped in the prior 0.3.0 cycle.
+- **`tests/test_server.py`** — 12 new tests: protocol round-trip, version
+  compatibility, end-to-end client/server, MotorMapper conversions (identity,
+  offset, sign-reversal, velocity clamp).
+
+### Changed
+- `Scene` is now the composable stage: tables, objects (free-floating cubes /
+  spheres / cylinders), lighting, RGB reference axes, table grids. Robots are
+  added separately. `build_workcell_from_scene(scene, arm, mount_pos)` builds
+  the model; the old `WorkcellConfig` path still works for single-arm cases.
+- Robot coloring: clean industrial off-white body, bright orange accent
+  gripper (URDF-import-aware: sets geom `rgba` directly).
+
+### Removed
+- `teach/jog.py` (older single-process jog). Superseded by
+  `loophole-arm-teleop`, which works against the multi-terminal architecture.
+
 ## [0.3.0] — control stack: sim-to-real, mink IK, safety, teach-and-repeat
 
 ### Added

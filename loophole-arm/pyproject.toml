@@ -57,6 +57,9 @@ all = ["loophole-arm[hardware,dev]"]
 loophole-arm-sim = "loophole_arm.sim_cli:main"
 # Teach-and-repeat product CLI.
 loophole-arm-teach = "loophole_arm.teach.cli:main"
+# Server/client architecture (multi-terminal).
+loophole-armd = "loophole_arm.server.cli:main"
+loophole-arm-teleop = "loophole_arm.server.teleop:main"
 
 [project.entry-points."lerobot.robots"]
 # Auto-discovery hook: LeRobot picks up our robot when the package is installed.

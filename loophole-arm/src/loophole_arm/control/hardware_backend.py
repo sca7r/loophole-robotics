@@ -60,12 +60,18 @@ class HardwareBackend(RobotInterface):
     tcp_site: str
     port: str = "/dev/ttyUSB0"
     control_hz: float = 20.0
+    motor_mapper: object = None        # MotorMapper, defaults to feetech placeholder
     _robot: object = field(default=None, repr=False)
     _last_step: float = field(default=0.0, repr=False)
 
     def __post_init__(self) -> None:
         if len(self.arm_joint_names) != len(self.lerobot_motor_names):
             raise ValueError("arm_joint_names and lerobot_motor_names must align 1:1")
+        if self.motor_mapper is None:
+            # Default to the structural-placeholder Feetech calibration; real
+            # values get filled in during bring-up (see motor_mapper.py).
+            from loophole_arm.control.motor_mapper import MotorMapper
+            self.motor_mapper = MotorMapper.feetech_default()
         # FK scratch state — never simulated, only mj_forward'd.
         self._fk_data = mujoco.MjData(self.model)
         self._arm_qpos_adr = [
@@ -109,11 +115,24 @@ class HardwareBackend(RobotInterface):
 
     @property
     def joint_positions(self) -> NDArray[np.float64]:
-        """Arm joint angles (radians) read from the servo encoders."""
+        """Arm joint angles (radians, kinematic frame) read from the servos.
+
+        Goes through :class:`MotorMapper` to convert from the servo's encoder
+        frame (where ``offset_rad`` is the calibration zero) to the URDF
+        kinematic frame used by sim, IK, and safety.
+        """
         obs = self._read_observation()
-        # use_degrees=False → LeRobot returns radians already.
-        # TODO(hardware): confirm sign/offset conventions match the URDF zero.
-        return np.array([obs[f"{m}.pos"] for m in self.lerobot_motor_names], dtype=float)
+        # LeRobot returns radians (use_degrees=False) already — these are the
+        # servo's encoder-frame angles. Apply per-motor offset + sign through
+        # the calibration mapper to get URDF-kinematic radians.
+        from loophole_arm.control.motor_mapper import MotorMapper
+        mapper: MotorMapper = self.motor_mapper  # type: ignore[assignment]
+        servo_rad = np.array([obs[f"{m}.pos"] for m in self.lerobot_motor_names], dtype=float)
+        # Convert encoder-frame → kinematic-frame:  q_kin = offset + sign * q_servo
+        out = np.empty_like(servo_rad)
+        for i, cal in enumerate(mapper.calibrations):
+            out[i] = cal.offset_rad + cal.sign * servo_rad[i]
+        return out
 
     @property
     def joint_velocities(self) -> NDArray[np.float64]:
@@ -135,12 +154,24 @@ class HardwareBackend(RobotInterface):
 
     # ── Commands (write) ────────────────────────────────────────────────
     def send_joint_targets(self, targets: Sequence[float]) -> None:
-        """Command absolute arm joint angles (radians) to the servos."""
+        """Command absolute arm joint angles (radians, kinematic frame).
+
+        Converts through :class:`MotorMapper` from URDF-kinematic radians to
+        the servo's encoder frame before handing off to LeRobot. This is the
+        single place sim and hardware reconcile.
+        """
         if self._robot is None:
             raise RuntimeError("not connected; call connect() first")
+        from loophole_arm.control.motor_mapper import MotorMapper
+        mapper: MotorMapper = self.motor_mapper  # type: ignore[assignment]
+        # Convert kinematic-frame → encoder-frame: q_servo = sign * (q_kin - offset)
+        servo_rad = [
+            cal.sign * (float(v) - cal.offset_rad)
+            for v, cal in zip(targets, mapper.calibrations, strict=True)
+        ]
         action = {
-            f"{m}.pos": float(v)
-            for m, v in zip(self.lerobot_motor_names, targets, strict=True)
+            f"{m}.pos": v
+            for m, v in zip(self.lerobot_motor_names, servo_rad, strict=True)
         }
         self._robot.send_action(action)  # type: ignore[attr-defined]
 

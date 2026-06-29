@@ -1,10 +1,10 @@
 # Loophole Robotics
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](./loophole-arm/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.2-blue)](./loophole-arm/CHANGELOG.md)
 
-A robotics product by Helix. Builds on the
-open-source stack — [LeRobot](https://github.com/huggingface/lerobot),
+A robotics product by [Helix](https://github.com/Helix-AI-Robotics). Builds on the
+open-source stack, [LeRobot](https://github.com/huggingface/lerobot),
 [MuJoCo](https://github.com/google-deepmind/mujoco),
 [mink](https://github.com/kevinzakka/mink) (IK).
 
@@ -18,7 +18,7 @@ that lets skills taught in simulation run on hardware unchanged.
 
 | Product | Description | Status |
 | --- | --- | --- |
-| **`loophole-arm teach`** | Teach-and-repeat by waypoints: teach in sim, replay on hardware later | 🟢 Built |
+| **`loophole-arm teach`** | Teach-and-repeat by waypoints, teach in sim, replay on hardware later | 🟢 Built |
 | **`loophole-arm vision`** | Camera-guided manipulation | ⚪ Planned |
 | reward-hacking sim suite | The original research demo (evolution strategy + reward hacking) | 🟢 Active |
 
@@ -39,7 +39,7 @@ SimBackend   HardwareBackend     ← validate in MuJoCo → deploy to Feetech
 ```
 
 One interface, two backends: a behaviour validated in simulation deploys to the
-real arm by swapping the backend — the task code does not change.
+real arm by swapping the backend, the task code does not change.
 
 ---
 
@@ -56,6 +56,11 @@ loophole-arm-teach demo --render out.mp4  # render it for a pitch deck
 
 # Live viewer / command file:
 python commands.py                      # run the editable task in a live window
+
+# Multi-terminal (one sim, many controllers):
+loophole-armd                           # terminal 1: sim server (holds the window)
+loophole-arm-teleop arm                 # terminal 2: numpad teleop
+loophole-arm-teach connect arm          # terminal 3: teach a skill, live
 ```
 
 See [`loophole-arm/README.md`](./loophole-arm/README.md) for full details and

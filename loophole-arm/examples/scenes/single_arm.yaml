@@ -1,0 +1,27 @@
+# Single-arm pick-and-place — the canonical default.
+# Run:  loophole-armd --scene examples/scenes/single_arm.yaml
+
+arms:
+  - name: arm
+    kind: feetech
+    mount_pos: [0.0, 0.0, 0.10]
+
+scene:
+  reference_axes: true
+  reference_axes_origin: [0.0, 0.0, 0.10]
+  table_grid: true
+
+  tables:
+    - size: [0.35, 0.45]
+      height: 0.10
+      pos: [0.0, 0.0]
+
+  objects:
+    - kind: cube
+      size: 0.025
+      pos: [0.18, 0.08, 0.13]
+      color: orange
+    - kind: cube
+      size: 0.025
+      pos: [0.18, -0.08, 0.13]
+      color: blue

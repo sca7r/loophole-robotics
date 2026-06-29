@@ -1,0 +1,49 @@
+# Two arms side by side, each with its own workbench and its own safety envelope.
+# arm_a has a generous workspace; arm_b is tightly bounded as if it sat next to
+# an operator. The arms are physically independent — commands to one do nothing
+# to the other. Connect to either from a separate terminal:
+#   loophole-arm-teleop arm_a    # numpad-drive arm_a
+#   loophole-arm-teach connect arm_b   (when that subcommand lands)
+#
+# Run:  loophole-armd --scene examples/scenes/pickplace_dual.yaml
+
+arms:
+  - name: arm_a
+    kind: feetech
+    mount_pos: [0.0, 0.0, 0.10]
+    # arm_a uses the default Feetech safety envelope (no `safety:` block).
+
+  - name: arm_b
+    kind: feetech
+    mount_pos: [0.55, 0.0, 0.10]
+    safety:
+      # Tighter workspace: only the region around arm_b's own table.
+      workspace_min: [0.40, -0.20, 0.10]
+      workspace_max: [0.70,  0.20, 0.40]
+      # Slower velocity cap (10 cm/tick is half the default).
+      max_joint_step: 0.10
+
+scene:
+  reference_axes: true
+  reference_axes_origin: [0.0, 0.0, 0.10]
+  table_grid: true
+
+  tables:
+    - size: [0.35, 0.45]
+      height: 0.10
+      pos: [0.0, 0.0]
+      name: table_a
+    - size: [0.35, 0.45]
+      height: 0.10
+      pos: [0.55, 0.0]
+      name: table_b
+
+  objects:
+    - kind: cube
+      size: 0.025
+      pos: [0.18, 0.08, 0.13]
+      color: orange
+    - kind: cube
+      size: 0.025
+      pos: [0.55, 0.0, 0.13]
+      color: blue

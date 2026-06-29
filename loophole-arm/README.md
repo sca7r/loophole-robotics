@@ -8,7 +8,7 @@
 LeRobot-compatible 6-DOF Feetech-servo manipulator with a MuJoCo-based
 reward-hacking demonstration suite.
 
-Part of [Loophole Robotics](../README.md), a product by Helix.
+Part of [Loophole Robotics](../README.md), a product by [Helix](https://github.com/Helix-AI-Robotics).
 
 ---
 
@@ -34,7 +34,8 @@ Part of [Loophole Robotics](../README.md), a product by Helix.
 └─────────────────┘                └────────────────────┘
 ```
 
-Hardware control, dataset recording, teleoperation, and state-of-the-art policy training (ACT,
+We deliberately don't reinvent what LeRobot does. Hardware control, dataset
+recording, teleoperation, and state-of-the-art policy training (ACT,
 Diffusion Policy, Pi0, SmolVLA, GR00T) all go through `lerobot`'s CLI with
 `--robot.type=loophole_arm`. This package adds the simulator and the
 research-grade reward-hacking tooling around it.
@@ -187,7 +188,26 @@ the optimizer against your reward to surface edge cases.
 loophole-arm-sim optimize --reward strict_grasp --generations 100
 ```
 
+---
 
+## Hardware costs
+
+See [../docs/HARDWARE_COSTS.md](../docs/HARDWARE_COSTS.md) for the honest
+breakdown. TL;DR: **$1.5 k–$3 k per deployment cell**, **$4 k–$7 k for a
+training workstation**. Anything beyond Tier 2 is research/SOTA chasing and
+not required for shipping.
+
+---
+
+## Industrial deployment
+
+See [../docs/INDUSTRIAL_DEPLOYMENT.md](../docs/INDUSTRIAL_DEPLOYMENT.md) for:
+
+- 15-minute new-cell bringup checklist
+- Safety requirements (hardware, software, operational)
+- Observability stack
+- Rollback procedure
+- When to add ROS 2 (and when not to)
 
 ---
 

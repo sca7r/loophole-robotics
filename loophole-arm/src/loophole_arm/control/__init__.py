@@ -19,21 +19,31 @@ from loophole_arm.control.limits import (
     SafetyViolation,
 )
 from loophole_arm.control.safety import SafetyBackend
+from loophole_arm.control.scene import ObjectSpec, Scene, TableSpec
 from loophole_arm.control.sim_backend import SimBackend
-from loophole_arm.control.workcell import TCP_SITE, WorkcellConfig, build_workcell_model
+from loophole_arm.control.workcell import (
+    TCP_SITE,
+    WorkcellConfig,
+    build_workcell_from_scene,
+    build_workcell_model,
+)
 
 __all__ = [
     "TCP_SITE",
     "IKSolution",
+    "ObjectSpec",
     "RobotController",
     "RobotInterface",
     "SafetyBackend",
     "SafetyLimits",
     "SafetyState",
     "SafetyViolation",
+    "Scene",
     "SimBackend",
     "TCPSolver",
+    "TableSpec",
     "WorkcellConfig",
+    "build_workcell_from_scene",
     "build_workcell_model",
     "make_hardware_robot",
     "make_sim_robot",
