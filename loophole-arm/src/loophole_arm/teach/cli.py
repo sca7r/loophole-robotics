@@ -26,37 +26,36 @@ from loophole_arm.teach.trajectory import Trajectory
 logger = logging.getLogger("loophole_arm.teach")
 
 _INTERACTIVE_HELP = """
-╭─ Teaching commands ────────────────────────────────────────────────────╮
+╭─ Teach prompt — the industry workflow ─────────────────────────────────╮
 │                                                                         │
-│  MOVING (and recording the move as a waypoint):                         │
-│    cart X Y Z [label]    move TCP to (x,y,z) metres                     │
-│         e.g.  cart 0.18 0.08 0.13 above pick                            │
-│    joints J1 J2 J3 J4 J5 J6 [label]   move to absolute joint angles    │
-│    home                  move to the home pose                          │
+│  Step 1 · JOG the gripper into position (no typing coordinates):        │
+│    jog x+ / x- / y+ / y- / z+ / z-    nudge the TCP one step            │
+│    step SIZE                          set jog step in metres            │
+│                                       (default 0.02 = 2 cm)             │
+│    where                              print current TCP + joints        │
 │                                                                         │
-│  EXPLORING (move WITHOUT recording — try-before-buy):                   │
-│    goto X Y Z            preview-move to (x,y,z)                        │
-│    where                 print current TCP coords + joint angles        │
+│  Step 2 · TEACH the pose a name:                                        │
+│    teach NAME            save the current pose  (e.g. teach pick_pose)  │
+│    points                list all taught points                         │
 │                                                                         │
-│  GRIPPER & TIMING:                                                      │
-│    grip open             open the gripper (and record it)               │
-│    grip close            close the gripper (and record it)              │
-│    dwell SECONDS         record a pause (e.g.  dwell 0.5)               │
+│  Step 3 · RUN skills using taught names:                                │
+│    pick NAME             approach → descend → grasp → lift  at NAME     │
+│    place NAME            approach → descend → release → lift at NAME    │
+│    open / close          gripper directly                               │
 │                                                                         │
-│  MANAGING THE SKILL:                                                    │
-│    list                  show waypoints recorded so far                 │
-│    undo                  remove the last waypoint                       │
-│    save NAME             save to skills/NAME.json                       │
-│    done                  finish (saves if a name was given) and exit    │
+│  RECORDING a replayable skill (same as before):                         │
+│    cart X Y Z [label]    move + record waypoint                         │
+│    joints J1..J6 [label] move + record joint waypoint                   │
+│    grip open|close       actuate + record                               │
+│    dwell SECONDS         record a pause                                 │
+│    goto X Y Z            preview-move WITHOUT recording                 │
+│    home | list | undo | save NAME | done                                │
 │                                                                         │
-│  HELP:                                                                  │
-│    help                  show this menu                                 │
-│    keys                  show coordinate system tip                     │
-│                                                                         │
+│  HELP:  help (this menu)   keys (coordinate system tip)                 │
 ╰─────────────────────────────────────────────────────────────────────────╯
 
-Tip: try  where  to see where the gripper is, then  goto X Y Z  to explore
-a target before recording it with  cart X Y Z .
+Typical session:  jog to the object → `teach pick_pose` → jog to the bin →
+`teach place_pose` → `pick pick_pose` → `place place_pose`. Done.
 """
 
 _COORDS_HELP = """
@@ -77,6 +76,9 @@ If the scene has reference axes turned on, you'll see them in the viewer:
 
 
 # ── teach (interactive) ──────────────────────────────────────────────────
+_POINTS_FILE = "workspace/points.json"
+
+
 def _interactive_loop(
     robot,
     home: list[float],
@@ -85,7 +87,21 @@ def _interactive_loop(
 ) -> str | None:
     """The interactive teach loop. Backend-agnostic: works for both the local
     ``make_sim_robot`` controller and a remote controller bound to ``loophole-armd``.
+
+    Implements the industry teach-pendant workflow: jog into position, teach
+    the pose a name, then run Pick/Place skills against taught names. Taught
+    points persist to ``workspace/points.json`` across sessions.
     """
+    from loophole_arm.skills import Pick, Place
+    from loophole_arm.skills.engine import SkillEngine, SkillNotFoundError
+
+    engine = SkillEngine()
+    n_loaded = engine.load_points(_POINTS_FILE)
+    if n_loaded:
+        print(f"(loaded {n_loaded} taught points from {_POINTS_FILE}: "
+              f"{', '.join(engine.point_names())})")
+
+    jog_step = 0.02   # metres per jog command; `step SIZE` changes it
     print(_INTERACTIVE_HELP)
     saved_to: str | None = None
     while True:
@@ -98,6 +114,62 @@ def _interactive_loop(
             continue
         parts = line.split()
         cmd = parts[0].lower()
+
+        # ── Industry workflow: jog / teach / points / pick / place ──────
+        if cmd == "jog" and len(parts) >= 2:
+            axes = {"x+": (jog_step, 0, 0), "x-": (-jog_step, 0, 0),
+                    "y+": (0, jog_step, 0), "y-": (0, -jog_step, 0),
+                    "z+": (0, 0, jog_step), "z-": (0, 0, -jog_step)}
+            d = axes.get(parts[1].lower())
+            if d is None:
+                print("  ? jog wants one of: x+ x- y+ y- z+ z-")
+                continue
+            tcp = robot.backend.end_effector_pose()
+            ok = robot.move_to(float(tcp[0] + d[0]), float(tcp[1] + d[1]),
+                               float(tcp[2] + d[2]), duration=0.4)
+            tcp = robot.backend.end_effector_pose()
+            status = "" if ok else "  (rejected — envelope/IK limit)"
+            print(f"  TCP ({tcp[0]:+.3f}, {tcp[1]:+.3f}, {tcp[2]:+.3f}){status}")
+            continue
+        if cmd == "step" and len(parts) >= 2:
+            try:
+                jog_step = max(0.001, min(0.10, float(parts[1])))
+                print(f"  jog step = {jog_step*1000:.0f} mm")
+            except ValueError:
+                print("  ? step wants a number in metres, e.g.  step 0.01")
+            continue
+        if cmd == "teach" and len(parts) >= 2:
+            point = engine.teach_point(parts[1], robot)
+            engine.save_points(_POINTS_FILE)
+            print(f"  taught {point.name!r} at TCP "
+                  f"({point.tcp[0]:+.3f}, {point.tcp[1]:+.3f}, {point.tcp[2]:+.3f})")
+            continue
+        if cmd == "points":
+            if not engine.point_names():
+                print("  (no taught points yet — jog into position, then `teach NAME`)")
+            for n in engine.point_names():
+                p = engine.get_point(n)
+                print(f"  {n:20s} TCP ({p.tcp[0]:+.3f}, {p.tcp[1]:+.3f}, {p.tcp[2]:+.3f})")
+            continue
+        if cmd in ("pick", "place") and len(parts) >= 2:
+            try:
+                p = engine.get_point(parts[1])
+            except SkillNotFoundError as e:
+                print(f"  {e}")
+                continue
+            skill_cls = Pick if cmd == "pick" else Place
+            skill = skill_cls(x=p.tcp[0], y=p.tcp[1], z=p.tcp[2])
+            print(f"  running {skill.describe()} ...")
+            result = engine.run(skill, robot)
+            print(f"  → {result.status.value}"
+                  + (f": {result.detail}" if result.detail else ""))
+            continue
+        if cmd == "open":
+            robot.open_gripper()
+            continue
+        if cmd == "close":
+            robot.close_gripper()
+            continue
 
         if cmd == "done":
             if save_name and saved_to is None:

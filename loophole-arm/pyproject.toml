@@ -53,8 +53,6 @@ dev = [
 all = ["loophole-arm[hardware,dev]"]
 
 [project.scripts]
-# Sim-only CLI. The real-arm CLI is `lerobot` itself once `[hardware]` is installed.
-loophole-arm-sim = "loophole_arm.sim_cli:main"
 # Teach-and-repeat product CLI.
 loophole-arm-teach = "loophole_arm.teach.cli:main"
 # Server/client architecture (multi-terminal).
@@ -131,7 +129,7 @@ markers = [
 [tool.coverage.run]
 source = ["loophole_arm"]
 branch = true
-omit = ["*/sim_cli.py", "*/__main__.py"]
+omit = []
 
 [tool.coverage.report]
 fail_under = 75

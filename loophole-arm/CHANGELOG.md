@@ -6,6 +6,75 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] — Skill Engine, lifecycle FSM, industry-style teach workflow
+
+### Added
+- **Skill Engine** (`loophole_arm.skills`) — the PRD's 11 required skills as
+  frozen dataclasses: `Home`, `MoveJoint`, `MoveLinear`, `Pick`, `Place`,
+  `OpenGripper`, `CloseGripper`, `Wait`, `Delay`, `Repeat`, `ExecuteSkill`.
+  Skills return typed `SkillResult`s (OK/SKIPPED/REJECTED/FAILED) instead of
+  raising on expected failure modes, so sequences compose without try/except
+  trees. `Pick`/`Place` are industry templates: approach → descend →
+  grasp/release → lift, with a parameterised approach height (default 5 cm).
+- **`SkillEngine`** — named-skill registry, sequence runner (stops at first
+  non-OK, returns the full trace), and a **taught-point store**: named poses
+  recorded at the prompt, persisted to `workspace/points.json`.
+- **Lifecycle FSM** (`loophole_arm.control.lifecycle`) — the PRD's
+  "Behavior Tree / FSM" layer, deliberately shipped as a 5-state FSM
+  (IDLE → READY → EXECUTING → ERROR → SHUTDOWN) rather than a behavior tree;
+  v1 programs are linear sequences, and BTs can layer on later without
+  redesign. Invalid transitions raise `InvalidTransitionError`.
+- **Robot SDK lifecycle** — `RobotController.connect()`, `.stop()`,
+  `.shutdown()` per the PRD SDK surface, wired to the FSM.
+- **Industry-style teach workflow** in the teach prompt (both local `teach`
+  and over-the-wire `connect`): `jog x+/x-/y+/y-/z+/z-` (with `step SIZE`),
+  `teach NAME` to name the current pose, `points` to list, and
+  `pick NAME` / `place NAME` to run the Pick/Place skill templates at taught
+  points. Operators never type coordinates; this is the teach-pendant
+  pattern used by UR/ABB/KUKA.
+- **Portability proof** (`tests/test_skill_portability.py`) — the *same*
+  skill list runs against a local `SimBackend` and a `RemoteBackend` over
+  TCP, asserting both finish at the same TCP position. The PRD's headline
+  success metric, demonstrated by test.
+- 21 new tests total (6 lifecycle, 13 skills, 2 portability): **82 passing**.
+
+### Changed
+- `RobotController.move_joints` and `.home` now return `bool` so the Skill
+  Engine treats all motion primitives uniformly.
+- Gripper UX: the teach prompt exposes `open` / `close` only. (The Feetech
+  gripper is mechanically 1-DOF, one `Joint_Gripper` hinge driving a
+  linkage; the multiple visible mesh segments are not separate axes.)
+
+## [0.5.0] — reward-hacking research code removed; tests honest again
+
+### Removed
+- **The reward-hacking research demo, completely.** The source files
+  (``loophole_arm.sim_cli``, ``loophole_arm.optimizer``, ``loophole_arm.rewards``,
+  ``loophole_arm.sim.env``) were already deleted in an earlier session; this
+  release finishes the cleanup of the wiring that still pointed at them:
+  - The ``loophole-arm-sim`` console-script entry point is gone from
+    ``pyproject.toml``.
+  - Coverage's ``omit = ["*/sim_cli.py", "*/__main__.py"]`` is gone.
+  - The cup-lift composer (``SceneConfig``, ``ResolvedScene``, ``build_spec``,
+    ``build_model``, ``end_effector_body``, the cup geometry, the per-arm
+    cup/table defaults) is gone from ``loophole_arm.sim.scene``. Only the
+    underscore-prefixed arm-spec builders ``_build_feetech_spec`` and
+    ``_build_ur5e_spec`` remain, the foundation that ``control.workcell``
+    attaches into multi-arm scenes.
+  - ``tests/test_env.py`` and ``tests/test_scene.py`` (both cup-lift specific)
+    are removed.
+- ``tests/conftest.py`` no longer imports the deleted ``CupLiftEnv``. Until
+  this release that broken import was silently preventing the test suite from
+  loading; the "81 tests passing" status reported in 0.4.3 and 0.4.4 was an
+  artefact of pytest output formatting hiding the collection failure. The
+  honest count is **61 passing**, these are the tests that actually run.
+
+### Why
+The product direction is teach-and-repeat + multi-arm + sim-to-real; the
+reward-hacking demo was the original research starting point and is not part
+of where the project is going. Per Karpathy: delete dead code; don't keep it
+"just in case."
+
 ## [0.4.4] — Helix brand assets
 
 ### Added
@@ -42,7 +111,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - Root README rewritten as a "do this → see this" tutorial. Quick-start that
   works in 5 minutes, followed by concrete recipes for teleop, teach, and
-  multi-arm scenes. No new content — just clearer ordering and copy-paste-
+  multi-arm scenes. No new content, just clearer ordering and copy-paste-
   friendly snippets.
 
 ## [0.4.2] — YAML scene configuration, per-arm safety limits

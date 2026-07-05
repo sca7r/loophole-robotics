@@ -1,18 +1,18 @@
 <p align="center">
-  <img src="docs/brand/helix-banner.jpeg" alt="Helix - AI · Robotics · Intelligence" width="640">
+  <img src="docs/brand/helix-banner.jpeg" alt="Helix — AI · Robotics · Intelligence" width="640">
 </p>
 
 # Loophole Robotics
 
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.4-blue)](./loophole-arm/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0-blue)](./loophole-arm/CHANGELOG.md)
 [![Org](https://img.shields.io/badge/by-Helix%20AI%20Robotics-silver)](https://github.com/Helix-AI-Robotics)
 
 A robotics control stack by [**Helix**](https://github.com/Helix-AI-Robotics)
 with **sim-to-real parity** by design: teach a skill in simulation, replay it
 on hardware later, no code changes.
 
-The flagship application is **Loophole Arm**, a 6-DOF Feetech-servo
+The flagship application is **Loophole Arm** — a 6-DOF Feetech-servo
 manipulator with a layered control stack, a safety supervisor, multi-arm
 support, and a server/client architecture so multiple terminals can drive
 different robots in one shared simulation.
@@ -37,16 +37,15 @@ If that printed `Playback complete` you're set. Skip to **What you can do next**
 
 ---
 
-## The four CLIs
+## The three CLIs
 
 ```
 loophole-arm-teach    teach-and-repeat workflows (in-process, no server)
-loophole-arm-sim      the research / reward-hacking sim (the original demo)
 loophole-armd         the multi-terminal simulation server
 loophole-arm-teleop   numpad teleop, connects to loophole-armd
 ```
 
-You only need `loophole-arm-teach` to do the demo. The other three are for the
+You only need `loophole-arm-teach` to do the demo. The other two are for the
 multi-terminal architecture (see below).
 
 ---
@@ -77,15 +76,22 @@ The TCP position is printed live on every keypress.
 ### 2. Teach a skill, save it, replay it
 
 ```bash
-# Method A — interactive in-process (no server needed):
+# The industry workflow (no coordinates — jog, name poses, run skills):
+loophole-arm-teach teach
+#   → at the teach> prompt:
+#       jog z-              # nudge the gripper down (step SIZE to change)
+#       jog x+              # ... position it over the object
+#       teach pick_pose     # name this pose
+#       jog y-              # move over the bin
+#       teach place_pose
+#       pick pick_pose      # approach → descend → grasp → lift
+#       place place_pose    # approach → descend → release → lift
+#   taught points persist in workspace/points.json across sessions
+
+# Or record a replayable waypoint skill with explicit coordinates:
 loophole-arm-teach teach --name my_skill
-#   → opens the viewer; at the teach> prompt:
 #       cart 0.18 0.08 0.18 above pick
-#       cart 0.18 0.08 0.12 grasp
 #       grip close
-#       cart 0.18 0.08 0.18 lift
-#       cart 0.18 -0.08 0.12 place
-#       grip open
 #       save my_skill
 #       done
 
@@ -144,7 +150,7 @@ SimBackend  HardwareBackend  RemoteBackend
 ```
 
 One interface, three backends. The controller, safety layer, IK solver, teach
-product, and teleop all target the interface, so a skill validated in sim
+product, and teleop all target the interface — so a skill validated in sim
 deploys to hardware unchanged, and a client driving a local sim works the same
 way as one driving a remote server.
 
@@ -157,14 +163,14 @@ Full architecture (Python / ROS 2 / C++ / firmware split, what we add when):
 
 | | |
 | --- | --- |
-| **In-process sim & control** | working: teach, play, sim_cli, reward-hacking sim |
+| **In-process sim & control** | working: teach, play |
 | **Multi-terminal server** | working: `loophole-armd`, numpad teleop, teach over the wire |
 | **Multi-arm in one scene** | working: 2+ arms via repeated `--arm`, or YAML |
 | **YAML scene configs** | working: per-arm safety limits, tables, objects |
 | **Hardware (Feetech)** | structural: `HardwareBackend` + `MotorMapper` ready, needs bench calibration |
 | **Camera-guided manipulation** | planned |
 
-81 tests passing, lint clean.
+82 tests passing, lint clean.
 
 ---
 

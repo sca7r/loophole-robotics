@@ -76,7 +76,7 @@ loophole-arm-sim optimize --reward shaped_lift           # train a trajectory in
 loophole-arm-sim render --params runs/.../best_params.npy --out demo.mp4
 ```
 
-### Drive the real arm (via LeRobot CLI, same robot type works for all commands)
+### Drive the real arm (via LeRobot CLI)
 ```bash
 # One-time servo bus setup
 lerobot-setup-motors --robot.type=loophole_arm --robot.port=/dev/ttyUSB0
@@ -156,7 +156,7 @@ from loophole_arm import LoopholeArm, LoopholeArmConfig
 cfg = LoopholeArmConfig(
     port="/dev/ttyUSB0",
     disable_torque_on_disconnect=True,
-    max_relative_target=10.0,         # degrees per tick — velocity-limit safety
+    max_relative_target=10.0,         # degrees per tick, velocity-limit safety
     use_degrees=True,
 )
 arm = LoopholeArm(cfg)
@@ -171,7 +171,7 @@ and pass the corresponding `--robot.port`, `--robot.id` etc.
 
 ---
 
-## Sim reward hacking, the research tooling
+## Sim reward hacking
 
 Three rewards demonstrate how the optimizer exploits whatever you write:
 
@@ -181,12 +181,31 @@ Three rewards demonstrate how the optimizer exploits whatever you write:
 | `shaped_lift` | Cup must end near the gripper, flinging stops |
 | `strict_grasp` | Adds contact-time bonus + motion penalty, cleanest motion |
 
-Calibration check: before deploying a policy, run
-the optimizer against your reward to surface edge cases.
 
 ```bash
 loophole-arm-sim optimize --reward strict_grasp --generations 100
 ```
+
+---
+
+## Hardware costs
+
+See [../docs/HARDWARE_COSTS.md](../docs/HARDWARE_COSTS.md) for the honest
+breakdown. TL;DR: **$1.5 k–$3 k per deployment cell**, **$4 k–$7 k for a
+training workstation**. Anything beyond Tier 2 is research/SOTA chasing and
+not required for shipping.
+
+---
+
+## Industrial deployment
+
+See [../docs/INDUSTRIAL_DEPLOYMENT.md](../docs/INDUSTRIAL_DEPLOYMENT.md) for:
+
+- 15-minute new-cell bringup checklist
+- Safety requirements (hardware, software, operational)
+- Observability stack
+- Rollback procedure
+- When to add ROS 2 (and when not to)
 
 ---
 

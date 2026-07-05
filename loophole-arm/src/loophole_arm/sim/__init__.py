@@ -1,6 +1,7 @@
-"""MuJoCo-based simulation layer for Loophole Arm experiments."""
+"""Arm-spec builders for :mod:`loophole_arm.control.workcell`.
 
-from loophole_arm.sim.env import CupLiftEnv, RolloutResult
-from loophole_arm.sim.scene import SceneConfig, build_model, build_spec
-
-__all__ = ["CupLiftEnv", "RolloutResult", "SceneConfig", "build_model", "build_spec"]
+The previous cup-lift / rollout / renderer code was removed along with the
+reward-hacking research demo. The arm spec builders themselves are still
+imported directly by ``control.workcell`` via the underscore-prefixed names,
+so there is no public re-export here.
+"""

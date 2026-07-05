@@ -1,29 +1,25 @@
-"""Programmatic scene composition.
+"""Arm-spec builders used by :mod:`loophole_arm.control.workcell`.
 
-Two arms are supported:
+This module exposes two private builders — ``_build_feetech_spec`` and
+``_build_ur5e_spec`` — that produce a bare ``mujoco.MjSpec`` for each
+supported arm. ``control.workcell`` then attaches one or more of these
+into a scene parent spec (see :func:`build_multi_arm_model`).
 
-* ``ur5e`` — Universal Robots UR5e + Robotiq 2F-85 from DeepMind Menagerie.
-  Used for high-fidelity benchmarking against an industrial-grade reference.
-* ``feetech`` — Custom 6-DOF Feetech-servo arm with a 1-DOF prismatic gripper.
-  The deployment target: low-cost, ROS 2-compatible, real hardware reachable.
-
-Scene composition is done with :class:`mujoco.MjSpec` so vendored model
-files stay drop-in replaceable and mesh paths resolve correctly.
+The previous module-level cup-lift composer, ``SceneConfig``, ``ResolvedScene``,
+``build_spec`` / ``build_model``, and ``end_effector_body`` were removed along
+with the reward-hacking research demo; the bare arm builders are kept because
+they remain the foundation of the multi-arm scene.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 import mujoco
 
 _PKG_ROOT = Path(__file__).resolve().parents[3]
 _MENAGERIE = _PKG_ROOT / "assets" / "menagerie"
 _FEETECH = _PKG_ROOT / "assets" / "feetech_arm"
-
-ArmName = Literal["ur5e", "feetech"]
 
 
 # ── Per-arm tuning ─────────────────────────────────────────────────────────
@@ -39,71 +35,7 @@ _FEETECH_KP = {
     "Joint_Gripper": 80.0,
 }
 
-# Home pose (radians) and scene placement tuned for each arm's reach envelope.
-# Feetech reach ≈ 35 cm; UR5e reach ≈ 85 cm.
-_ARM_DEFAULTS: dict[str, dict] = {
-    "feetech": {
-        "home_qpos": (0.0, -0.5, 1.0, 0.0, 0.0, 0.0, 0.0),
-        "cup_pos": (0.18, 0.0, 0.16),
-        "table_pos": (0.18, 0.0, 0.05),
-        "table_half_size": (0.10, 0.12, 0.05),
-    },
-    "ur5e": {
-        "home_qpos": (0.0, -1.2, 1.6, -1.8, -1.57, 0.0),
-        "cup_pos": (0.55, 0.0, 0.46),
-        "table_pos": (0.55, 0.0, 0.20),
-        "table_half_size": (0.25, 0.30, 0.20),
-    },
-}
 
-
-@dataclass(frozen=True)
-class SceneConfig:
-    """Tunable parameters for the cup-lift scene."""
-
-    arm: ArmName = "feetech"
-    cup_radius: float = 0.022
-    cup_half_height: float = 0.04
-    cup_density: float = 250.0
-    cup_friction: tuple[float, float, float] = (1.2, 0.05, 0.001)
-
-    # Optional overrides. None means "use the arm's default."
-    cup_pos: tuple[float, float, float] | None = None
-    table_pos: tuple[float, float, float] | None = None
-    table_half_size: tuple[float, float, float] | None = None
-    home_qpos: tuple[float, ...] | None = None
-
-    def resolved(self) -> ResolvedScene:
-        d = _ARM_DEFAULTS[self.arm]
-        return ResolvedScene(
-            arm=self.arm,
-            cup_pos=self.cup_pos or d["cup_pos"],
-            table_pos=self.table_pos or d["table_pos"],
-            table_half_size=self.table_half_size or d["table_half_size"],
-            home_qpos=self.home_qpos or d["home_qpos"],
-            cup_radius=self.cup_radius,
-            cup_half_height=self.cup_half_height,
-            cup_density=self.cup_density,
-            cup_friction=self.cup_friction,
-        )
-
-
-@dataclass(frozen=True)
-class ResolvedScene:
-    """Scene with all defaults applied — convenient for env code."""
-
-    arm: ArmName
-    cup_pos: tuple[float, float, float]
-    table_pos: tuple[float, float, float]
-    table_half_size: tuple[float, float, float]
-    home_qpos: tuple[float, ...]
-    cup_radius: float
-    cup_half_height: float
-    cup_density: float
-    cup_friction: tuple[float, float, float]
-
-
-# ── Builders ───────────────────────────────────────────────────────────────
 def _build_feetech_spec(
     *,
     kp_scale: float = 1.0,
@@ -118,9 +50,8 @@ def _build_feetech_spec(
     Parameters
     ----------
     kp_scale:
-        Multiplier on the base position gains. The reward-hacking sim uses
-        1.0 (weak, realistic servos). The control workcell uses a higher
-        value so the arm holds commanded poses against gravity.
+        Multiplier on the base position gains. The control workcell uses a
+        higher value (~2.0) so the arm holds commanded poses against gravity.
     add_velocity_damping:
         Add a velocity-feedback term (kv) for a critically-damped PD response.
     force_limit:
@@ -193,63 +124,3 @@ def _build_ur5e_spec() -> mujoco.MjSpec:
     arm.option.cone = mujoco.mjtCone.mjCONE_ELLIPTIC
     arm.site("attachment_site").attach_body(gripper.body("base_mount"), "gripper_", "")
     return arm
-
-
-# ── Public API ─────────────────────────────────────────────────────────────
-def build_spec(cfg: SceneConfig | None = None) -> mujoco.MjSpec:
-    """Compose the configured arm + table + free-body cup into a single spec."""
-    cfg = cfg or SceneConfig()
-    r = cfg.resolved()
-
-    spec = _build_feetech_spec() if cfg.arm == "feetech" else _build_ur5e_spec()
-
-    world = spec.worldbody
-
-    # Lighting
-    world.add_light(
-        pos=[0, 0, 2.0],
-        dir=[0, 0, -1],
-        type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
-    )
-    world.add_light(pos=[0.8, -0.6, 1.5], dir=[-0.5, 0.4, -1])
-
-    # Floor (neither URDF includes one).
-    world.add_geom(
-        name="floor",
-        type=mujoco.mjtGeom.mjGEOM_PLANE,
-        size=[3, 3, 0.05],
-        rgba=[0.88, 0.88, 0.88, 1],
-    )
-
-    # Table
-    world.add_geom(
-        name="table",
-        type=mujoco.mjtGeom.mjGEOM_BOX,
-        pos=list(r.table_pos),
-        size=list(r.table_half_size),
-        rgba=[0.62, 0.45, 0.30, 1],
-    )
-
-    # Free-body cup
-    cup = world.add_body(name="cup", pos=list(r.cup_pos))
-    cup.add_freejoint(name="cup_free")
-    cup.add_geom(
-        name="cup_geom",
-        type=mujoco.mjtGeom.mjGEOM_CYLINDER,
-        size=[r.cup_radius, r.cup_half_height, 0.0],
-        rgba=[0.85, 0.25, 0.25, 1],
-        density=r.cup_density,
-        friction=list(r.cup_friction),
-    )
-
-    return spec
-
-
-def build_model(cfg: SceneConfig | None = None) -> mujoco.MjModel:
-    """Convenience: compose, compile, return a ready-to-use ``MjModel``."""
-    return build_spec(cfg).compile()
-
-
-def end_effector_body(arm: ArmName) -> str:
-    """Body name used by env code to track the gripper / TCP."""
-    return "Gripper" if arm == "feetech" else "gripper_base_mount"

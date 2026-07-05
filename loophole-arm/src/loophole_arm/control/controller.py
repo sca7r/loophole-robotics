@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from loophole_arm.control.interface import RobotInterface
+from loophole_arm.control.lifecycle import Event, Lifecycle
 
 
 # ── The controller: three layers of control ─────────────────────────────
@@ -33,6 +34,7 @@ class RobotController:
     solver: object = None             # TCPSolver, injected by the factory
     control_hz: float = 20.0
     settle_time: float = 0.4          # seconds to let a motion settle
+    lifecycle: Lifecycle = field(default_factory=Lifecycle)
     _viewer_sync: object = field(default=None, repr=False)
 
     @property
@@ -44,10 +46,12 @@ class RobotController:
         self,
         targets: Sequence[float],
         duration: float = 1.5,
-    ) -> None:
+    ) -> bool:
         """Move the arm joints to absolute angles over ``duration`` seconds.
 
         Interpolates smoothly from the current pose so motion isn't jerky.
+        Returns ``True`` — kept as a bool so the Skill Engine can treat all
+        motion primitives uniformly (``move_to`` can genuinely fail on IK).
         """
         start = self.backend.joint_positions
         goal = np.asarray(targets, dtype=float)
@@ -59,6 +63,7 @@ class RobotController:
             self.backend.step(self.dt)
             self._maybe_sync()
         self._settle()
+        return True
 
     # ── Layer 2: task space ─────────────────────────────────────────────
     def move_to(
@@ -102,9 +107,40 @@ class RobotController:
         self.backend.set_gripper(1.0)
         self._dwell(0.3)
 
-    def home(self, home_pose: Sequence[float], duration: float = 1.5) -> None:
+    def home(self, home_pose: Sequence[float], duration: float = 1.5) -> bool:
         """Return the arm to a named rest configuration."""
-        self.move_joints(home_pose, duration=duration)
+        return self.move_joints(home_pose, duration=duration)
+
+    # ── Robot SDK lifecycle (PRD: connect / stop / shutdown) ────────────
+    # The lifecycle FSM tracks IDLE → READY → EXECUTING → ERROR → SHUTDOWN.
+    # `connect()` wires the backend and arms safety; `stop()` halts motion
+    # without disconnecting; `shutdown()` is terminal.
+    def connect(self) -> None:
+        """Connect the backend, arm safety, and enter READY."""
+        if not self.backend.is_connected:
+            self.backend.connect()
+        self.enable()
+        if self.lifecycle.can(Event.CONNECT):
+            self.lifecycle.transition(Event.CONNECT)
+
+    def stop(self) -> None:
+        """Stop motion now (e-stop path) but keep the connection alive.
+
+        Recover with :meth:`reset_safety` + :meth:`enable`.
+        """
+        self.estop()
+        if self.lifecycle.can(Event.FAULT):
+            self.lifecycle.transition(Event.FAULT)
+
+    def shutdown(self) -> None:
+        """Terminal: stop motion, disconnect, mark lifecycle SHUTDOWN."""
+        try:
+            self.estop()
+        finally:
+            if self.backend.is_connected:
+                self.backend.disconnect()
+            if self.lifecycle.can(Event.SHUTDOWN):
+                self.lifecycle.transition(Event.SHUTDOWN)
 
     # ── Safety controls (no-op if no safety supervisor is attached) ─────
     def enable(self) -> None:
