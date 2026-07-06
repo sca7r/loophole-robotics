@@ -85,6 +85,19 @@ class SimBackend(RobotInterface):
         self.data.ctrl[self._grip_act_id] = self._grip_lo + frac * (self._grip_hi - self._grip_lo)
 
     # ── Timing ──────────────────────────────────────────────────────────
+    def object_positions(self) -> dict[str, list[float]]:
+        """Every free body in the scene (our pickable objects) with its live
+        position. The arm's own bodies have hinge joints, not free joints,
+        so they are naturally excluded."""
+        import mujoco
+        out: dict[str, list[float]] = {}
+        for j in range(self.model.njnt):
+            if self.model.jnt_type[j] == mujoco.mjtJoint.mjJNT_FREE:
+                body_id = self.model.jnt_bodyid[j]
+                name = self.model.body(body_id).name or f"body_{body_id}"
+                out[name] = [float(v) for v in self.data.body(body_id).xpos]
+        return out
+
     def step(self, dt: float) -> None:
         n = max(1, int(dt / self.model.opt.timestep))
         for _ in range(n):

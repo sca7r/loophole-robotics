@@ -38,9 +38,10 @@ _INTERACTIVE_HELP = """
 │    teach NAME            save the current pose  (e.g. teach pick_pose)  │
 │    points                list all taught points                         │
 │                                                                         │
-│  Step 3 · RUN skills using taught names:                                │
-│    pick NAME             approach → descend → grasp → lift  at NAME     │
-│    place NAME            approach → descend → release → lift at NAME    │
+│  Step 3 · RUN skills on taught names OR live objects:                   │
+│    objects               list scene objects with live positions         │
+│    pick NAME             NAME is a taught point or an object            │
+│    place NAME            approach, descend, act, lift                   │
 │    open / close          gripper directly                               │
 │                                                                         │
 │  RECORDING a replayable skill (same as before):                         │
@@ -59,6 +60,12 @@ Typical session:  jog to the object → `teach pick_pose` → jog to the bin →
 """
 
 _COORDS_HELP = """
+EVERY coordinate you type (cart, goto, skills) is in the BASE frame:
+an absolute position measured from the arm's base on the floor. It is
+never relative to the gripper. The gripper (TCP) is the point that MOVES
+to your coordinate. Use `objects` or `where` to see live positions both
+ways: absolute, and as "how far from the gripper".
+
 Coordinate system (right-handed, arm base at origin):
 
    +X = forward (away from you, into the scene)
@@ -77,6 +84,26 @@ If the scene has reference axes turned on, you'll see them in the viewer:
 
 # ── teach (interactive) ──────────────────────────────────────────────────
 _POINTS_FILE = "workspace/points.json"
+# Table-strike guard for the pick/place workflow: never command the TCP
+# below 5 mm above the standard table top (0.10 m). Low-height reach itself
+# works since 0.10.0 (IK branch restart + closed-loop refinement).
+_GRASP_MIN_Z = 0.105
+
+
+def _describe_offset(dx: float, dy: float, dz: float) -> str:
+    """Human phrasing of a delta from the gripper, in centimetres.
+
+    Example: "4.2cm forward, 1.0cm left, 2.8cm below". Signs follow the
+    base-frame convention printed by the `keys` command.
+    """
+    parts = []
+    if abs(dx) >= 0.002:
+        parts.append(f"{abs(dx)*100:.1f}cm {'forward' if dx > 0 else 'back'}")
+    if abs(dy) >= 0.002:
+        parts.append(f"{abs(dy)*100:.1f}cm {'left' if dy > 0 else 'right'}")
+    if abs(dz) >= 0.002:
+        parts.append(f"{abs(dz)*100:.1f}cm {'above' if dz > 0 else 'below'}")
+    return ", ".join(parts) if parts else "at the gripper"
 
 
 def _interactive_loop(
@@ -151,14 +178,44 @@ def _interactive_loop(
                 p = engine.get_point(n)
                 print(f"  {n:20s} TCP ({p.tcp[0]:+.3f}, {p.tcp[1]:+.3f}, {p.tcp[2]:+.3f})")
             continue
+        if cmd == "objects":
+            objs = robot.backend.object_positions()
+            if not objs:
+                print("  (no pickable objects in this scene, or backend has no perception)")
+            else:
+                # Two views of every object: absolute base-frame coordinates
+                # (what you type into cart/goto) and the delta FROM the
+                # gripper (how far you would have to move to reach it).
+                tcp = robot.backend.end_effector_pose()
+                print("  name                 base frame (x, y, z)        from gripper")
+                for name in sorted(objs):
+                    x, y, z = objs[name]
+                    dx, dy, dz = x - tcp[0], y - tcp[1], z - tcp[2]
+                    rel = _describe_offset(dx, dy, dz)
+                    print(f"  {name:20s} ({x:+.3f}, {y:+.3f}, {z:+.3f})   {rel}")
+            continue
         if cmd in ("pick", "place") and len(parts) >= 2:
+            # Resolve the target: a taught point first, then a live scene
+            # object by name (in sim, perception is free: the physics state
+            # knows every object pose).
+            target = None
             try:
-                p = engine.get_point(parts[1])
-            except SkillNotFoundError as e:
-                print(f"  {e}")
+                pt = engine.get_point(parts[1])
+                target = pt.tcp
+            except SkillNotFoundError:
+                objs = robot.backend.object_positions()
+                if parts[1] in objs:
+                    target = tuple(objs[parts[1]])
+            if target is None:
+                print(f"  no taught point or scene object named {parts[1]!r}")
+                print(f"  taught: {engine.point_names()}")
+                print(f"  objects: {sorted(robot.backend.object_positions())}")
                 continue
+            # The Feetech arm cannot put the TCP lower than ~0.115 m at
+            # working reach (IK + joint limits), so clamp the grasp height.
+            grasp_z = max(float(target[2]), _GRASP_MIN_Z)
             skill_cls = Pick if cmd == "pick" else Place
-            skill = skill_cls(x=p.tcp[0], y=p.tcp[1], z=p.tcp[2])
+            skill = skill_cls(x=float(target[0]), y=float(target[1]), z=grasp_z)
             print(f"  running {skill.describe()} ...")
             result = engine.run(skill, robot)
             print(f"  → {result.status.value}"
@@ -202,8 +259,14 @@ def _interactive_loop(
         elif cmd == "where":
             tcp = robot.backend.end_effector_pose()
             joints = robot.backend.joint_positions
-            print(f"  TCP    : x={tcp[0]:+.3f}  y={tcp[1]:+.3f}  z={tcp[2]:+.3f}  metres")
+            print(f"  TCP    : x={tcp[0]:+.3f}  y={tcp[1]:+.3f}  z={tcp[2]:+.3f}  metres (base frame)")
             print("  Joints : [" + ", ".join(f"{j:+.3f}" for j in joints) + "] rad")
+            objs = robot.backend.object_positions()
+            if objs:
+                print("  Nearby :")
+                for name in sorted(objs):
+                    x, y, z = objs[name]
+                    print(f"    {name:18s} {_describe_offset(x-tcp[0], y-tcp[1], z-tcp[2])}")
         elif cmd == "goto" and len(parts) >= 4:
             x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
             ok = robot.move_to(x, y, z, duration=1.5)
@@ -221,7 +284,11 @@ def _interactive_loop(
 
 
 def cmd_teach(args: argparse.Namespace) -> int:
-    robot, model, data, home = make_sim_robot(arm=args.arm)
+    # The default teaching scene includes two named cubes so the `objects`
+    # and `pick cube_orange` workflow works out of the box.
+    from loophole_arm.control.scene import default_pickplace_scene
+    robot, model, data, home = make_sim_robot(arm=args.arm,
+                                              scene=default_pickplace_scene())
     session = TeachSession(robot, name=args.name or "untitled", arm=args.arm)
 
     viewer_ctx = _maybe_viewer(model, data, robot)
@@ -263,12 +330,12 @@ def cmd_connect(args: argparse.Namespace) -> int:
         return 2
 
     solver = TCPSolver(model, backend.tcp_site, arm_joint_names=backend.arm_joint_names)
-    controller = RobotController(backend=backend, solver=solver, control_hz=20.0)
+    controller = RobotController(backend=backend, solver=solver, control_hz=20.0,
+                                 home_pose=tuple(backend.home_pose))
     controller.enable()
 
-    # Generic home pose for Feetech-shaped arms. Avoids needing the server to
-    # publish a home pose, which it doesn't today.
-    home = [0.0, -0.5, 1.0, 0.0, 0.0, 0.0]
+    # Home pose reported by the server from the robot's robot.yaml.
+    home = list(backend.home_pose) if backend.home_pose else [0.0] * backend.n_arm_joints
     session = TeachSession(controller, name=args.name or "untitled", arm="feetech")
 
     print(f"\nTeaching '{session.trajectory.name}' over the wire on robot {args.robot!r}.")

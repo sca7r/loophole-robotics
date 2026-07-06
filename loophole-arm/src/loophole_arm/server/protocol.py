@@ -39,6 +39,7 @@ RequestOp = Literal[
     "reset_safety",           # safety
     "state",                  # safety supervisor state (idle/operational/...)
     "n_arm_joints",           # introspection
+    "object_positions",       # perception: free-body poses from the sim
 ]
 
 

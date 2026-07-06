@@ -6,6 +6,154 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - generic grasp infrastructure, TCP in config, relative coordinates
+
+### Added
+- **Generic collision pads.** Any robot may declare ``collision.pads`` in
+  its robot.yaml (body, local position, box half-extents, friction); the
+  spec builder applies them for every robot. Feetech declares fingertip
+  pads on both jaws, measured from real grasp contacts. Pads exist because
+  MuJoCo convexifies mesh collision, which makes thin jaws behave fatter
+  than they look.
+- **TCP definition in robot.yaml.** The ``tcp:`` section (parent body +
+  local offset) replaces the hardcoded per-arm dicts in workcell.py. The
+  Feetech TCP moved from the MOVING jaw (it swung whenever the gripper
+  actuated: a real, previously invisible defect) to the fixed-jaw side at
+  the open-aperture pad midpoint, so descending straddles the object.
+- **Closed-loop refinement in move_to.** After a motion, if the TCP misses
+  tolerance, re-solve IK from the current configuration and nudge, up to
+  three passes (what a real controller's servo loop does). Tracking near
+  the workspace floor improved from ~4 cm to ~1.6 cm.
+- **Relative-coordinates display.** ``objects`` and ``where`` now show
+  every object both in the base frame and as a human-readable delta from
+  the gripper ("6.6cm back, 7.8cm left, 5.8cm below"). The ``keys`` help
+  explains the frames: all typed coordinates are BASE-frame absolute; the
+  gripper is the point that moves, never the origin.
+- Low-height reach works: the 0.140 m grasp-floor patch is gone, replaced
+  by a 0.105 m table-strike guard only.
+
+### Known gap (tracked, root-caused, honestly red)
+- The cube still does not physically lift. The blocker is now a measured
+  geometric statement, not a mystery: jaw aperture 3.3 cm vs 2.5 cm cube
+  leaves 4 mm clearance per side, and TCP tracking plateaus at ~1.6 cm, so
+  a jaw column clips the cube during descent. Grasp reliability equals
+  aperture margin versus tracking accuracy; closing the final ~12 mm
+  (stiffer gains near the floor and/or wider pad aperture) is the next
+  focused session. See tests/test_perception.py.
+
+## [0.9.0] - sim perception, object-name picking, teleop letters, joint axes
+
+### Added
+- **Sim perception: `object_positions()`.** In simulation, "where is the
+  object" is answered by the physics engine itself. The `RobotInterface`
+  gains an optional `object_positions()` (default `{}`); `SimBackend`
+  returns every free body's live pose, `SafetyBackend` forwards it, and a
+  new `object_positions` protocol op serves it to remote clients. Hardware
+  returns `{}` until vision lands, so application code written against sim
+  keeps working unchanged.
+- **Pick by object name.** The teach prompt gains `objects` (list scene
+  objects with live positions) and `pick NAME` / `place NAME` now resolve
+  taught points first, then live objects. The in-process teach scene ships
+  two named cubes (`cube_orange`, `cube_blue`) so `pick cube_orange` works
+  out of the box.
+- **Teleop letter keys.** w/s (X), a/d (Y), r/f (Z), o/c gripper, h home,
+  alongside the numpad (laptops without numpads were a real complaint).
+  Reset moved from r to x.
+- **`loophole-armd --show-joint-axes`.** Renders MuJoCo's joint markers:
+  one axis per DOF (6 arm hinges + 1 gripper hinge per arm).
+- **IK branch-restart in `move_to`.** If the solve seeded from the current
+  configuration cannot reach the target within tolerance, retry once seeded
+  from the home pose (the standard restart heuristic; a gradual descent can
+  drift the elbow into a branch that cannot go lower).
+- **Stepped descend/lift in Pick and Place.** Vertical moves execute as
+  2 cm Cartesian hops, matching how real controllers segment approach
+  paths, instead of one large IK jump.
+- 4 perception tests plus 1 honestly-skipped test tracking the grasp gap:
+  **104 passing**.
+
+### Known gap (tracked, not hidden)
+- The gripper reaches the cube, both finger geoms make contact, and the
+  servo stalls at its force limit, but friction does not hold the cube
+  through the lift (verified with friction to 2.5 and both cone models).
+  Diagnosis: STL mesh collision on a single-hinge jaw gives a poor contact
+  patch. The workflow's grasp floor is 0.140 m until the fix (fingertip
+  primitive collision geoms + low-reach IK) lands in its own session; see
+  `tests/test_perception.py::test_pick_physically_lifts_cube`.
+
+## [0.8.0] - diagnostics, config externalization, dead-code removal, newcomer docs
+
+### Added
+- **Diagnostics per the PRD.** `robot.health()` returns one dict with every
+  field the PRD lists: software version, backend, connection, lifecycle and
+  safety state, e-stop flag, fault history, warnings, runtime, cycle count,
+  servo temperatures, voltage, current, firmware version, communication
+  health, and a coarse health score. Honesty rule: values the current
+  backend cannot measure are `None` with the reason in `sources`; sim never
+  invents temperatures. Cycle count increments when a skill sequence
+  completes end to end. 5 new tests.
+- **Newcomer README.** The root README is rewritten for someone new to both
+  robotics and the project: a 90-second vocabulary table (DOF, TCP, IK,
+  teach pendant, sim-to-real), the layer-by-layer mental model, a full
+  repository map with one line per folder, and an extension table showing
+  how to add robots, backends, skills, scenes and safety limits without
+  editing existing code.
+
+### Changed
+- **Actuation gains externalized.** The Feetech kp table and force limit
+  moved from `sim/scene.py` into `robots/feetech/robot.yaml` under
+  `actuation:`. The spec builder reads the catalog; nothing robot-specific
+  remains hardcoded in the scene module.
+- `commands.py` now demonstrates the Skill Engine (`Pick(...).run(robot)`
+  via `SkillEngine`), which is the product surface, instead of controller
+  convenience methods.
+
+### Removed
+- **`RobotController.pick()` and `.place()`.** They duplicated the `Pick`
+  and `Place` skills. Skills are the single implementation now; the demo
+  and tests were migrated. A pointer comment remains at the old location.
+- Dead-code scan (vulture, 80 percent confidence) is clean; remaining
+  lower-confidence hits were audited and are all live API or plugin
+  contract surface.
+
+## [0.7.0] - folder-per-robot, robot catalog, Plugin Manager, MockBackend, FSM wired
+
+### Added
+- **Folder-per-robot layout.** Every robot now lives in `robots/<name>/`
+  with all of its files together: model (URDF/MJCF), meshes, a `robot.yaml`
+  describing joints, home pose, gripper, motor channels and hardware
+  defaults, and a README. `robots/feetech/` holds the full Feetech arm
+  (moved from `assets/feetech_arm/`); `robots/ur5e/` holds the catalog entry
+  for the vendored Menagerie model. Adding a robot means adding a folder,
+  not editing source.
+- **Robot catalog** (`loophole_arm.robots`): `load_robot(name)` returns a
+  `RobotSpec` (joints, home, gripper actuator, motors, model paths).
+  Hardcoded joint lists and home poses were removed from eight modules
+  (factory, workcell, motor_mapper, server CLI, teleop, teach connect,
+  Home skill, scene builder); all now read the catalog. The server's hello
+  reply carries the robot's home pose so clients never assume one.
+- **Plugin Manager** (`loophole_arm.control.plugins`): a backend registry
+  with `register_backend(name, loader)` and `create_backend(name, ...)`.
+  Built-ins: `sim`, `hardware`, `mock`, `remote`. Loaders import lazily so
+  optional dependencies stay optional.
+- **MockBackend** (`loophole_arm.control.mock_backend`): a physics-free
+  `RobotInterface`; targets become positions instantly, `step()` is free,
+  and `fail_next_command` injects a fault on the next write. Skill and FSM
+  tests now run in milliseconds without MuJoCo.
+- **FSM wired into skill execution.** `SkillEngine.run` drives the robot
+  lifecycle: READY -> EXECUTING on start, back to READY on OK/SKIPPED/
+  REJECTED, ERROR on FAILED or on a backend exception (which is converted
+  to a FAILED result instead of crashing the operator prompt). Proven by
+  fault-injection tests with the mock: fault -> ERROR -> RESET -> READY.
+- 13 new tests (4 catalog, 4 plugin registry, 2 mock, 3 FSM wiring):
+  **95 passing**.
+
+### Changed
+- `ArmHandle` and `RobotEndpoint` carry the robot's home pose;
+  `RobotController` has an optional `home_pose`; the bare `Home()` skill
+  uses it and rejects with a clear message when no home pose is known.
+- `_save_model_for_clients` copies meshes for every catalogued robot
+  instead of a hardcoded Feetech path.
+
 ## [0.6.0] — Skill Engine, lifecycle FSM, industry-style teach workflow
 
 ### Added
@@ -42,7 +190,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 - `RobotController.move_joints` and `.home` now return `bool` so the Skill
   Engine treats all motion primitives uniformly.
 - Gripper UX: the teach prompt exposes `open` / `close` only. (The Feetech
-  gripper is mechanically 1-DOF, one `Joint_Gripper` hinge driving a
+  gripper is mechanically 1-DOF,  one `Joint_Gripper` hinge driving a
   linkage; the multiple visible mesh segments are not separate axes.)
 
 ## [0.5.0] — reward-hacking research code removed; tests honest again
@@ -59,7 +207,7 @@ adheres to [Semantic Versioning](https://semver.org/).
     ``build_model``, ``end_effector_body``, the cup geometry, the per-arm
     cup/table defaults) is gone from ``loophole_arm.sim.scene``. Only the
     underscore-prefixed arm-spec builders ``_build_feetech_spec`` and
-    ``_build_ur5e_spec`` remain, the foundation that ``control.workcell``
+    ``_build_ur5e_spec`` remain — the foundation that ``control.workcell``
     attaches into multi-arm scenes.
   - ``tests/test_env.py`` and ``tests/test_scene.py`` (both cup-lift specific)
     are removed.
@@ -67,7 +215,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   this release that broken import was silently preventing the test suite from
   loading; the "81 tests passing" status reported in 0.4.3 and 0.4.4 was an
   artefact of pytest output formatting hiding the collection failure. The
-  honest count is **61 passing**, these are the tests that actually run.
+  honest count is **61 passing** — these are the tests that actually run.
 
 ### Why
 The product direction is teach-and-repeat + multi-arm + sim-to-real; the
@@ -111,7 +259,7 @@ of where the project is going. Per Karpathy: delete dead code; don't keep it
 ### Changed
 - Root README rewritten as a "do this → see this" tutorial. Quick-start that
   works in 5 minutes, followed by concrete recipes for teleop, teach, and
-  multi-arm scenes. No new content, just clearer ordering and copy-paste-
+  multi-arm scenes. No new content — just clearer ordering and copy-paste-
   friendly snippets.
 
 ## [0.4.2] — YAML scene configuration, per-arm safety limits

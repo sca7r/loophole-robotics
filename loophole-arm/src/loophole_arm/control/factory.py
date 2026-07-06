@@ -21,28 +21,7 @@ from loophole_arm.control.workcell import (
     build_workcell_from_scene,
     build_workcell_model,
 )
-
-# Per-arm wiring. ``arm_joints`` are the MuJoCo joint names (canonical order);
-# ``lerobot_motors`` are the matching LeRobot motor channels for hardware. The
-# end-effector control frame is the TCP site (shared by name across arms). Add
-# new arms here; the command file never changes.
-_ARM_WIRING: dict[str, dict] = {
-    "feetech": {
-        "arm_joints": ["Joint_1", "Joint_2", "Joint_3", "Joint_4", "Joint_5", "Joint_6"],
-        "lerobot_motors": [
-            "shoulder_pan", "shoulder_lift", "elbow_flex",
-            "wrist_flex", "wrist_roll", "wrist_yaw",
-        ],
-        "gripper": "Joint_Gripper",
-        "home": [0.0, -0.5, 1.0, 0.0, 0.0, 0.0],
-    },
-    "ur5e": {
-        "arm_joints": ["shoulder_pan", "shoulder_lift", "elbow", "wrist_1", "wrist_2", "wrist_3"],
-        "lerobot_motors": [],  # UR5e is a benchmark reference, not a deploy target
-        "gripper": "gripper_fingers_actuator",
-        "home": [0.0, -1.2, 1.6, -1.8, -1.57, 0.0],
-    },
-}
+from loophole_arm.robots import RobotNotFoundError, available_robots, load_robot
 
 
 def make_sim_robot(
@@ -78,9 +57,10 @@ def make_sim_robot(
     -------
     (controller, model, data, home_pose)
     """
-    if arm not in _ARM_WIRING:
-        raise ValueError(f"unknown arm {arm!r}; known: {sorted(_ARM_WIRING)}")
-    wiring = _ARM_WIRING[arm]
+    try:
+        rspec = load_robot(arm)
+    except RobotNotFoundError:
+        raise ValueError(f"unknown arm {arm!r}; known: {available_robots()}") from None
 
     if scene is not None:
         # Composable path: scene + arm mounted on first table (or floor).
@@ -93,23 +73,24 @@ def make_sim_robot(
         model = build_workcell_model(cfg)
     data = mujoco.MjData(model)
 
-    home = wiring["home"]
+    home = list(rspec.home)
     data.qpos[: len(home)] = home
     mujoco.mj_forward(model, data)
 
     backend: SimBackend | SafetyBackend = SimBackend(
         model=model,
         data=data,
-        arm_joint_names=wiring["arm_joints"],
-        gripper_actuator=wiring["gripper"],
+        arm_joint_names=list(rspec.joints),
+        gripper_actuator=rspec.gripper_actuator,
         tcp_site=TCP_SITE,
     )
     backend.connect()
     if safety:
         backend = SafetyBackend(backend, limits or SafetyLimits.feetech_default())
         backend.enable()
-    solver = TCPSolver(model, TCP_SITE, arm_joint_names=wiring["arm_joints"])
-    controller = RobotController(backend=backend, solver=solver, control_hz=control_hz)
+    solver = TCPSolver(model, TCP_SITE, arm_joint_names=list(rspec.joints))
+    controller = RobotController(backend=backend, solver=solver, control_hz=control_hz,
+                                 home_pose=rspec.home)
     return controller, model, data, home
 
 
@@ -133,10 +114,11 @@ def make_hardware_robot(
     -------
     (controller, home_pose)
     """
-    if arm not in _ARM_WIRING:
-        raise ValueError(f"unknown arm {arm!r}; known: {sorted(_ARM_WIRING)}")
-    wiring = _ARM_WIRING[arm]
-    if not wiring["lerobot_motors"]:
+    try:
+        rspec = load_robot(arm)
+    except RobotNotFoundError:
+        raise ValueError(f"unknown arm {arm!r}; known: {available_robots()}") from None
+    if not rspec.motors:
         raise ValueError(f"arm {arm!r} has no hardware mapping; sim-only")
 
     # Import here so sim users never need the hardware deps installed.
@@ -145,14 +127,15 @@ def make_hardware_robot(
     model = build_workcell_model(WorkcellConfig(arm=arm))
     backend: HardwareBackend | SafetyBackend = HardwareBackend(
         model=model,
-        arm_joint_names=wiring["arm_joints"],
-        lerobot_motor_names=wiring["lerobot_motors"],
+        arm_joint_names=list(rspec.joints),
+        lerobot_motor_names=list(rspec.motors),
         tcp_site=TCP_SITE,
         port=port,
         control_hz=control_hz,
     )
     if safety:
         backend = SafetyBackend(backend, limits or SafetyLimits.feetech_default())
-    solver = TCPSolver(model, TCP_SITE, arm_joint_names=wiring["arm_joints"])
-    controller = RobotController(backend=backend, solver=solver, control_hz=control_hz)
-    return controller, wiring["home"]
+    solver = TCPSolver(model, TCP_SITE, arm_joint_names=list(rspec.joints))
+    controller = RobotController(backend=backend, solver=solver, control_hz=control_hz,
+                                 home_pose=rspec.home)
+    return controller, list(rspec.home)

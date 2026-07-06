@@ -175,6 +175,11 @@ class SafetyBackend(RobotInterface):
     def kinematic_model(self) -> mujoco.MjModel:
         return self._inner.kinematic_model()
 
+    def object_positions(self) -> dict[str, list[float]]:
+        # Perception is read-only; forward to the wrapped backend. Without
+        # this, the interface's default {} would mask the sim's real data.
+        return self._inner.object_positions()
+
     @property
     def joint_positions(self) -> NDArray[np.float64]:
         return self._inner.joint_positions

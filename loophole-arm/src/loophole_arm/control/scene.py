@@ -384,3 +384,22 @@ def _add_table_grid(world, t: TableSpec, name: str, spacing: float = 0.05) -> No
             rgba=line_rgba,
             **common,
         )
+
+
+def default_pickplace_scene() -> Scene:
+    """The canonical single-arm teaching scene: one workbench, two cubes,
+    reference axes and a grid. Used by the in-process teach CLI; the server
+    builds its own N-arm variant of the same recipe (see server/cli.py).
+    """
+    return (
+        Scene(
+            reference_axes=True,
+            reference_axes_origin=(0.0, 0.0, 0.10),
+            table_grid=True,
+        )
+        .add_table(size=(0.35, 0.45), height=0.10, pos=(0.0, 0.0))
+        .add_object("cube", size=0.025, pos=(0.18, 0.08, 0.13), color="orange",
+                    name="cube_orange")
+        .add_object("cube", size=0.025, pos=(0.18, -0.08, 0.13), color="blue",
+                    name="cube_blue")
+    )

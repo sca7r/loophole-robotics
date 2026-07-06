@@ -1,0 +1,81 @@
+# Everything the software needs to know about this robot, in one place.
+# The catalog loader (loophole_arm.robots) reads this file; no code
+# hardcodes joint names, home poses, or motor channels anymore.
+
+name: feetech
+description: 6-DOF Feetech STS3215 servo arm with a 1-DOF jaw gripper
+
+model:
+  format: urdf
+  file: arm_mujoco.urdf        # relative to this folder
+  meshes: meshes               # relative to this folder
+
+joints:                        # canonical order, matches the URDF
+  - Joint_1
+  - Joint_2
+  - Joint_3
+  - Joint_4
+  - Joint_5
+  - Joint_6
+
+gripper:
+  actuator: Joint_Gripper      # single hinge driving the jaw linkage
+  dof: 1
+
+home:                          # radians, canonical joint order
+  [0.0, -0.5, 1.0, 0.0, 0.0, 0.0]
+
+motors:                        # LeRobot bus channel names, one per joint
+  - shoulder_pan
+  - shoulder_lift
+  - elbow_flex
+  - wrist_flex
+  - wrist_roll
+  - wrist_yaw
+
+hardware:
+  bus: feetech
+  default_port: /dev/ttyUSB0
+  baudrate: 1000000
+
+actuation:
+  # Position-servo gains per joint (MuJoCo kp). The servos peak around
+  # 3 N*m, so gains are small; the shoulder lift fights gravity and gets
+  # more. Tuning data, so it lives here with the robot, not in code.
+  kp:
+    Joint_1: 30.0
+    Joint_2: 50.0
+    Joint_3: 40.0
+    Joint_4: 25.0
+    Joint_5: 20.0
+    Joint_6: 15.0
+    Joint_Gripper: 80.0
+  force_limit: 3.0            # per-joint torque clamp, N*m
+
+tcp:
+  # The tool centre point: the midpoint between the fingertip pads at FULL
+  # OPEN aperture, parented to Link_6 (the fixed-jaw side) so the control
+  # point does not swing when the gripper actuates. Descending with this
+  # point on the object centre straddles the object between the open jaws;
+  # closing then sweeps the moving jaw in, pressing the object against the
+  # fixed jaw, which is how a single-actuated gripper is meant to grasp.
+  # This is the point IK places at your commanded (x, y, z).
+  parent: Link_6
+  offset: [0.0799, 0.0021, 0.0084]
+
+collision:
+  # Grasp-quality fingertip pads. STL mesh collision is convexified by
+  # MuJoCo, which makes thin jaws behave fatter than they look and gives a
+  # poor contact patch; small primitive boxes at the fingertips restore a
+  # crisp, high-friction grip surface. Positions are in each body's local
+  # frame (measured from actual grasp contacts, see CHANGELOG 0.10.0).
+  # Any robot may declare pads; the spec builder applies them generically.
+  pads:
+    - body: Link_6            # fixed jaw tip
+      pos: [0.078, 0.002, -0.008]
+      size: [0.008, 0.014, 0.014]
+      friction: [2.0, 0.05, 0.002]
+    - body: Gripper           # moving jaw tip (mesh ends ~1 cm short)
+      pos: [0.070, 0.002, -0.010]
+      size: [0.008, 0.014, 0.014]
+      friction: [2.0, 0.05, 0.002]

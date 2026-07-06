@@ -34,8 +34,12 @@ class RobotController:
     solver: object = None             # TCPSolver, injected by the factory
     control_hz: float = 20.0
     settle_time: float = 0.4          # seconds to let a motion settle
+    home_pose: tuple[float, ...] = ()  # rest pose from robot.yaml, if known
     lifecycle: Lifecycle = field(default_factory=Lifecycle)
     _viewer_sync: object = field(default=None, repr=False)
+    # Diagnostics bookkeeping (read by control/diagnostics.py).
+    _connected_at: float | None = field(default=None, repr=False)
+    _cycle_count: int = field(default=0, repr=False)
 
     @property
     def dt(self) -> float:
@@ -88,15 +92,36 @@ class RobotController:
         if check is not None and not check(np.array([x, y, z])):
             return False
 
-        # Seed IK from the current arm joint angles — read through the
+        # Seed IK from the current arm joint angles: read through the
         # interface, so this works identically in sim and on hardware.
-        arm_q = self.backend.joint_positions
-        sol = self.solver.solve(np.array([x, y, z]), arm_q)
-        if not sol.converged:
-            return False
-        self.move_joints(sol.q, duration=duration)
-        reached = float(np.linalg.norm(self.backend.end_effector_pose() - [x, y, z]))
-        return reached <= tol * 3  # allow sim settling slack
+        # If that seed's configuration branch cannot reach the target
+        # (common when a gradual descent drifts the elbow into a poor
+        # branch), retry once seeded from the neutral home pose, which is
+        # the classic restart heuristic real controllers use.
+        seeds = [self.backend.joint_positions]
+        if len(self.home_pose) == len(seeds[0]):
+            seeds.append(np.asarray(self.home_pose, dtype=float))
+        target = np.array([x, y, z])
+        for seed in seeds:
+            sol = self.solver.solve(target, seed)
+            if not sol.converged:
+                continue
+            self.move_joints(sol.q, duration=duration)
+            # Closed-loop refinement: gravity sag and interpolation leave a
+            # residual; re-solve from the CURRENT configuration and nudge.
+            # Grasping tolerances (millimetres of jaw clearance) need this;
+            # it is exactly what a real controller's servo loop does.
+            for _ in range(3):
+                err = float(np.linalg.norm(self.backend.end_effector_pose() - target))
+                if err <= tol:
+                    return True
+                ref = self.solver.solve(target, self.backend.joint_positions)
+                if not ref.converged:
+                    break
+                self.move_joints(ref.q, duration=max(0.2, duration * 0.25))
+            if float(np.linalg.norm(self.backend.end_effector_pose() - target)) <= tol * 2:
+                return True
+        return False
 
     # ── Layer 3: skills ─────────────────────────────────────────────────
     def open_gripper(self) -> None:
@@ -122,6 +147,8 @@ class RobotController:
         self.enable()
         if self.lifecycle.can(Event.CONNECT):
             self.lifecycle.transition(Event.CONNECT)
+        import time as _time
+        self._connected_at = _time.monotonic()
 
     def stop(self) -> None:
         """Stop motion now (e-stop path) but keep the connection alive.
@@ -161,28 +188,23 @@ class RobotController:
         if fn is not None:
             fn()
 
-    def pick(self, x: float, y: float, z: float, approach: float = 0.06) -> bool:
-        """Top-down pick: approach above, descend, grasp, lift.
+    def health(self) -> dict:
+        """Full health report per the PRD Diagnostics module.
 
-        A composite skill built from the lower layers. This is the level the
-        command file mostly works at.
+        Sim and mock backends return honest ``None`` sentinels for values
+        only hardware can measure; see ``control/diagnostics.py``.
         """
-        self.open_gripper()
-        if not self.move_to(x, y, z + approach):           # hover above
-            return False
-        self.move_to(x, y, z, duration=1.0)                 # descend
-        self.close_gripper()                                # grasp
-        self.move_to(x, y, z + approach, duration=1.0)      # lift
-        return True
+        from loophole_arm.control.diagnostics import collect_health
+        return collect_health(self)
 
-    def place(self, x: float, y: float, z: float, approach: float = 0.06) -> bool:
-        """Top-down place: approach above target, lower, release, retract."""
-        if not self.move_to(x, y, z + approach):
-            return False
-        self.move_to(x, y, z, duration=1.0)
-        self.open_gripper()
-        self.move_to(x, y, z + approach, duration=1.0)
-        return True
+    # NOTE: pick() and place() used to live here as controller methods.
+    # They were removed in 0.8.0 because they duplicated the Pick and Place
+    # skills (loophole_arm.skills), which are the product surface per the
+    # PRD ("customer workflows should use robot skills"). If you need a
+    # pick, run the skill:
+    #
+    #     from loophole_arm.skills import Pick
+    #     Pick(x=0.18, y=0.08, z=0.12).run(robot)
 
     # ── Internals ───────────────────────────────────────────────────────
     def _settle(self) -> None:

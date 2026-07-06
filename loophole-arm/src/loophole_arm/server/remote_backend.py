@@ -78,6 +78,7 @@ class RemoteBackend(RobotInterface):
         self.arm_joint_names: list[str] = []
         self.gripper_actuator: str = ""
         self.tcp_site: str = ""
+        self.home_pose: tuple[float, ...] = ()
 
     # ── Lifecycle ───────────────────────────────────────────────────────
     def connect(self) -> None:
@@ -98,6 +99,7 @@ class RemoteBackend(RobotInterface):
         self.arm_joint_names = list(hello.get("arm_joint_names", []))
         self.gripper_actuator = str(hello.get("gripper_actuator", ""))
         self.tcp_site = str(hello.get("tcp_site", ""))
+        self.home_pose = tuple(float(v) for v in hello.get("home", []))
         if not versions_compatible(hello.get("version", "0.0")):
             raise RemoteConnectionError(
                 f"server protocol {hello.get('version')} incompatible with client {PROTOCOL_VERSION}"
@@ -173,6 +175,12 @@ class RemoteBackend(RobotInterface):
             robot=self.robot_name,
             args={"closed_fraction": float(closed_fraction)},
         ))
+
+    # ── Perception ──────────────────────────────────────────────────────
+    def object_positions(self) -> dict[str, list[float]]:
+        """Live object poses, served by the simulation over the wire."""
+        value = self._call(Request(op="object_positions", robot=self.robot_name))
+        return {str(k): [float(x) for x in v] for k, v in (value or {}).items()}
 
     # ── Timing ──────────────────────────────────────────────────────────
     def step(self, dt: float) -> None:

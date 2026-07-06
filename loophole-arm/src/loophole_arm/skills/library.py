@@ -34,8 +34,13 @@ class Home(Skill):
     pose: tuple[float, ...] | None = None
 
     def run(self, robot: RobotController) -> SkillResult:
-        home = list(self.pose) if self.pose is not None else [0.0, -0.5, 1.0, 0.0, 0.0, 0.0]
-        ok = robot.home(home)
+        pose = self.pose if self.pose is not None else (robot.home_pose or None)
+        if pose is None:
+            return SkillResult.make_rejected(
+                self.name,
+                "no home pose: pass Home(pose=...) or set RobotController.home_pose",
+            )
+        ok = robot.home(list(pose))
         return SkillResult.make_ok(self.name) if ok else SkillResult.make_failed(self.name, "home motion failed")
 
     def describe(self) -> str:
@@ -104,6 +109,26 @@ class CloseGripper(Skill):
 # ── Pick / Place templates ──────────────────────────────────────────────
 
 
+def _stepped_z_move(robot: RobotController, x: float, y: float,
+                    z_from: float, z_to: float, total_duration: float,
+                    step_m: float = 0.02) -> bool:
+    """Move the TCP vertically from z_from to z_to in small increments.
+
+    One big IK solve from the approach pose down to the grasp pose can fail
+    to converge (the solver is seeded from the current configuration and a
+    5 cm jump near the workspace floor is a hard ask). Real controllers
+    descend as a segmented straight line; each 2 cm hop converges reliably.
+    """
+    dz = z_to - z_from
+    n = max(1, int(abs(dz) / step_m + 0.5))
+    per_step = max(0.15, total_duration / n)
+    for i in range(1, n + 1):
+        z = z_from + dz * (i / n)
+        if not robot.move_to(x, y, z, duration=per_step):
+            return False
+    return True
+
+
 @dataclass(frozen=True)
 class Pick(Skill):
     """Industry-style pick template: approach → descend → close → lift.
@@ -129,16 +154,19 @@ class Pick(Skill):
             return SkillResult.make_rejected(self.name, "approach pose unreachable")
         # 2. Open the gripper before descending.
         robot.open_gripper()
-        # 3. Descend.
-        ok = robot.move_to(self.x, self.y, self.z, duration=self.descend_duration)
+        # 3. Descend in small hops (see _stepped_z_move for why).
+        ok = _stepped_z_move(robot, self.x, self.y,
+                             self.z + self.approach_height, self.z,
+                             self.descend_duration)
         if not ok:
             return SkillResult.make_rejected(self.name, "descend pose unreachable")
         # 4. Grasp.
         robot.close_gripper()
         time.sleep(self.settle_seconds)
-        # 5. Lift.
-        ok = robot.move_to(self.x, self.y, self.z + self.approach_height,
-                           duration=self.lift_duration)
+        # 5. Lift, same segmented path in reverse.
+        ok = _stepped_z_move(robot, self.x, self.y,
+                             self.z, self.z + self.approach_height,
+                             self.lift_duration)
         if not ok:
             return SkillResult.make_failed(self.name, "lift pose unreachable after grasp")
         return SkillResult.make_ok(self.name)
@@ -167,13 +195,16 @@ class Place(Skill):
                            duration=self.descend_duration)
         if not ok:
             return SkillResult.make_rejected(self.name, "approach pose unreachable")
-        ok = robot.move_to(self.x, self.y, self.z, duration=self.descend_duration)
+        ok = _stepped_z_move(robot, self.x, self.y,
+                             self.z + self.approach_height, self.z,
+                             self.descend_duration)
         if not ok:
             return SkillResult.make_rejected(self.name, "descend pose unreachable")
         robot.open_gripper()
         time.sleep(self.settle_seconds)
-        ok = robot.move_to(self.x, self.y, self.z + self.approach_height,
-                           duration=self.lift_duration)
+        ok = _stepped_z_move(robot, self.x, self.y,
+                             self.z, self.z + self.approach_height,
+                             self.lift_duration)
         if not ok:
             return SkillResult.make_failed(self.name, "retreat unreachable after release")
         return SkillResult.make_ok(self.name)

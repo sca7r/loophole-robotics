@@ -45,8 +45,9 @@ def robot() -> RobotController:
     backend.connect()
     backend.enable()
     solver = TCPSolver(model, h.tcp_site, arm_joint_names=h.arm_joints)
-    ctrl = RobotController(backend=backend, solver=solver, control_hz=20.0)
-    ctrl.home([0.0, -0.5, 1.0, 0.0, 0.0, 0.0])
+    ctrl = RobotController(backend=backend, solver=solver, control_hz=20.0,
+                           home_pose=h.home)
+    ctrl.home(list(h.home))
     return ctrl
 
 

@@ -17,23 +17,15 @@ from pathlib import Path
 
 import mujoco
 
+from loophole_arm.robots import load_robot
+
 _PKG_ROOT = Path(__file__).resolve().parents[3]
 _MENAGERIE = _PKG_ROOT / "assets" / "menagerie"
-_FEETECH = _PKG_ROOT / "assets" / "feetech_arm"
 
 
-# ── Per-arm tuning ─────────────────────────────────────────────────────────
-# Feetech actuator gains, tuned per joint. The servos have ~3 N·m peak,
-# so kp values are small; the shoulder lift fights gravity and gets more.
-_FEETECH_KP = {
-    "Joint_1": 30.0,
-    "Joint_2": 50.0,
-    "Joint_3": 40.0,
-    "Joint_4": 25.0,
-    "Joint_5": 20.0,
-    "Joint_6": 15.0,
-    "Joint_Gripper": 80.0,
-}
+# Actuator tuning (kp gains, force limits) lives in each robot's
+# robots/<name>/robot.yaml under `actuation:`, loaded via the catalog.
+# Nothing robot-specific is hardcoded here.
 
 
 def _build_feetech_spec(
@@ -62,12 +54,14 @@ def _build_feetech_spec(
     joint_damping:
         Per-joint viscous damping.
     """
-    urdf = _FEETECH / "arm_mujoco.urdf"
+    rspec = load_robot("feetech")
+    urdf = rspec.model_path
     if not urdf.exists():
         raise FileNotFoundError(
             f"Feetech URDF not found at {urdf}. Run `python scripts/convert_feetech_urdf.py` first."
         )
     spec = mujoco.MjSpec.from_file(str(urdf))
+    _apply_collision_pads(spec, rspec.collision)
 
     # Joint-level damping + armature for numerical stability under position
     # control. Without armature, stiff actuators are unstable at 2 ms.
@@ -88,8 +82,14 @@ def _build_feetech_spec(
             geom.conaffinity = 1   # collides only with group-1 (world) geoms
 
     # Add position actuators (URDF doesn't carry these for MuJoCo).
+    # Gains come from robot.yaml's actuation.kp table.
+    kp_table: dict[str, float] = rspec.actuation.get("kp", {})
+    if not kp_table:
+        raise ValueError(
+            "robots/feetech/robot.yaml is missing the actuation.kp table"
+        )
     joint_ranges = {j.name: j.range for j in spec.joints}
-    for joint_name, base_kp in _FEETECH_KP.items():
+    for joint_name, base_kp in kp_table.items():
         lo, hi = joint_ranges[joint_name]
         kp = base_kp * kp_scale
         # Critically-damped PD: kv ≈ 2·sqrt(kp) gives a smooth, non-oscillatory
@@ -111,6 +111,36 @@ def _build_feetech_spec(
         act.gaintype = mujoco.mjtGain.mjGAIN_FIXED
         act.biastype = mujoco.mjtBias.mjBIAS_AFFINE
     return spec
+
+
+def _apply_collision_pads(spec: mujoco.MjSpec, collision: dict) -> None:
+    """Add primitive grasp pads declared in a robot's robot.yaml.
+
+    Generic: any robot may declare ``collision.pads`` (body name, local pos,
+    box half-extents, friction). Pads are invisible (alpha 0) collision-only
+    geometry; they exist because convexified mesh collision gives thin
+    gripper jaws a poor contact patch. Applied before the self-collision
+    contype/conaffinity pass so pads inherit the arm's contact groups.
+    """
+    pads = (collision or {}).get("pads") or []
+    if not pads:
+        return
+    bodies = {b.name: b for b in spec.bodies}
+    for i, pad in enumerate(pads):
+        body_name = str(pad.get("body", ""))
+        if body_name not in bodies:
+            raise ValueError(
+                f"collision.pads[{i}]: no body named {body_name!r} in the model; "
+                f"bodies: {sorted(bodies)}"
+            )
+        bodies[body_name].add_geom(
+            name=f"{body_name}_pad_{i}",
+            type=mujoco.mjtGeom.mjGEOM_BOX,
+            pos=[float(v) for v in pad["pos"]],
+            size=[float(v) for v in pad["size"]],
+            friction=[float(v) for v in pad.get("friction", [1.5, 0.05, 0.002])],
+            rgba=[0, 0, 0, 0],       # collision-only, invisible
+        )
 
 
 def _build_ur5e_spec() -> mujoco.MjSpec:

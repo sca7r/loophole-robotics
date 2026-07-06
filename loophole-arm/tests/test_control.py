@@ -62,8 +62,11 @@ def test_pick_and_place_runs() -> None:
     """A full pick → place → home sequence completes without error."""
     robot, model, data, home = make_sim_robot(arm="feetech")
     robot.home(home)
-    assert robot.pick(0.18, 0.08, 0.12)
-    assert robot.place(0.18, -0.08, 0.12)
+    # pick/place are exercised by the Pick/Place skills in test_skills.py;
+    # the controller-level duplicates were removed in 0.8.0.
+    from loophole_arm.skills import Pick, Place
+    assert Pick(x=0.18, y=0.08, z=0.14).run(robot).ok
+    assert Place(x=0.18, y=-0.08, z=0.14).run(robot).ok
     robot.home(home)
     # Arm returned near home
     drift = np.abs(np.array(home) - robot.backend.joint_positions).max()

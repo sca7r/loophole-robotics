@@ -34,7 +34,6 @@ from loophole_arm.server.sim_server import RobotEndpoint, SimServer
 logger = logging.getLogger("loophole_arm.server")
 
 
-_FEETECH_HOME = [0.0, -0.5, 1.0, 0.0, 0.0, 0.0]
 # How far apart arms sit along X when more than one is requested. 0.55 m gives
 # clear visual separation without their workspaces overlapping at the home pose.
 _ARM_SPACING_X = 0.55
@@ -90,7 +89,7 @@ def _build_endpoints(
         backend.connect()
         backend.enable()
         solver = TCPSolver(model, h.tcp_site, arm_joint_names=h.arm_joints)
-        endpoints[h.name] = RobotEndpoint(name=h.name, backend=backend, solver=solver)
+        endpoints[h.name] = RobotEndpoint(name=h.name, backend=backend, solver=solver, home=tuple(h.home))
     return endpoints
 
 
@@ -105,10 +104,13 @@ def _save_model_for_clients(spec: mujoco.MjSpec) -> str:
     import shutil
     out_dir = Path(tempfile.gettempdir()) / "loophole_armd"
     out_dir.mkdir(exist_ok=True)
-    meshes_src = Path(__file__).resolve().parent.parent.parent.parent / "assets" / "feetech_arm" / "meshes"
-    if meshes_src.exists():
-        for stl in meshes_src.glob("*.STL"):
-            shutil.copy2(stl, out_dir / stl.name)
+    # Mesh locations come from each robot's catalog entry.
+    from loophole_arm.robots import available_robots, load_robot
+    for rname in available_robots():
+        meshes_src = load_robot(rname).meshes_path
+        if meshes_src and meshes_src.exists():
+            for stl in meshes_src.glob("*.STL"):
+                shutil.copy2(stl, out_dir / stl.name)
     xml_path = out_dir / "model.xml"
     xml_path.write_text(spec.to_xml())
     return str(xml_path)
@@ -125,6 +127,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scene", type=Path, default=None,
                         help="Load arms + scene from a YAML config file. "
                              "See examples/scenes/*.yaml.")
+    parser.add_argument("--show-joint-axes", action="store_true",
+                        help="Render an axis marker at every joint (one per "
+                             "DOF: 6 arm hinges + 1 gripper hinge per arm).")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
     configure_logging(args.log_level)
@@ -149,8 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     model, spec, handles = build_multi_arm_model(scene, arms)
     data = mujoco.MjData(model)
     # Put every arm at its home pose so the scene opens looking like a workshop.
+    # Home poses come from each robot's robot.yaml, carried on the handle.
     for h in handles:
-        for jname, q in zip(h.arm_joints, _FEETECH_HOME, strict=True):
+        for jname, q in zip(h.arm_joints, h.home, strict=True):
             data.qpos[model.jnt_qposadr[model.joint(jname).id]] = q
     mujoco.mj_forward(model, data)
 
@@ -160,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     server = SimServer(
         model=model, data=data, endpoints=endpoints,
         host=args.host, port=args.port, model_path=model_path,
+        show_joint_axes=args.show_joint_axes,
     )
     logger.info("starting server on %s:%d with robots: %s",
                 args.host, args.port, sorted(endpoints))

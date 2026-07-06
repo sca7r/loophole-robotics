@@ -1,0 +1,35 @@
+name: ur5e
+description: Universal Robots UR5e with Robotiq 2F-85 gripper (vendored models)
+
+model:
+  format: mjcf
+  # The UR5e model is vendored from MuJoCo Menagerie (Apache-2.0) and fetched
+  # by scripts/fetch_menagerie.sh into assets/menagerie/. Paths are relative
+  # to the package root, not this folder.
+  file: assets/menagerie/universal_robots_ur5e/ur5e.xml
+  gripper_file: assets/menagerie/robotiq_2f85/2f85.xml
+
+joints:
+  - shoulder_pan_joint
+  - shoulder_lift_joint
+  - elbow_joint
+  - wrist_1_joint
+  - wrist_2_joint
+  - wrist_3_joint
+
+gripper:
+  actuator: gripper_fingers_actuator
+  dof: 1
+
+home:
+  [0.0, -1.57, 1.57, -1.57, -1.57, 0.0]
+
+tcp:
+  parent: gripper_base_mount
+  offset: [0.0, 0.0, 0.10]
+
+motors: []                     # no LeRobot bus; UR uses its own controller
+
+hardware:
+  bus: ur_rtde
+  default_ip: 192.168.1.20

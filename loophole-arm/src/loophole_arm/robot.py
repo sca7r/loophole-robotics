@@ -5,7 +5,7 @@ up as a standard LeRobot follower robot. Once installed, ``lerobot``'s CLI
 tools (teleoperate, record, calibrate, train) detect this robot
 automatically via the ``loophole_arm`` registry key.
 
-The motor layout below mirrors the URDF in ``assets/feetech_arm/`` — six
+The motor layout below mirrors the URDF in ``robots/feetech/`` — six
 revolute joints plus a prismatic gripper, all on a single serial bus.
 """
 

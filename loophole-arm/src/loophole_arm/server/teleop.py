@@ -40,13 +40,18 @@ _STEP_SCALES = [0.005, 0.010, 0.020, 0.040, 0.080]   # cycle with + / -
 
 
 _HELP = """
-Numpad teleop:
-  7 +Z   8 +Y   9 open
-  4 -X   5 home 6 +X
-  1 close 2 -Y  3 -Z
-  + / -  bigger/smaller step
-  0 / .  print position
-  e      e-stop      r  reset safety
+Teleop keys (letters or numpad, same motions):
+
+  LETTERS (laptop friendly)         NUMPAD
+    w / s   forward / back  (X)       6 / 4
+    a / d   left / right    (Y)       8 / 2
+    r / f   up / down       (Z)       7 / 3
+    o / c   open / close gripper      9 / 1
+    h       home                      5
+
+  + / -    bigger / smaller step
+  0 or .   print position
+  e        e-stop        x   reset safety
   q / Esc  quit
 """
 
@@ -80,11 +85,14 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: server did not report arm joint names / TCP site.")
         return 2
     solver = TCPSolver(model, backend.tcp_site, arm_joint_names=backend.arm_joint_names)
-    controller = RobotController(backend=backend, solver=solver, control_hz=20.0)
+    controller = RobotController(backend=backend, solver=solver, control_hz=20.0,
+                                 home_pose=tuple(backend.home_pose))
     controller.enable()
 
-    # Home pose for the '5' key.
-    home_pose = [0.0, -0.5, 1.0, 0.0, 0.0, 0.0]
+    # Home pose for the '5' key, reported by the server from robot.yaml.
+    home_pose = list(backend.home_pose) if backend.home_pose else None
+    if home_pose is None:
+        print("WARNING: server did not report a home pose; '5' (home) disabled.")
 
     print(_HELP)
     step_idx = 2
@@ -111,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
                     print("\n[E-STOP]")
                     controller.estop()
                     continue
-                if key == "r":
+                if key == "x":
                     print("\n[reset + enable]")
                     controller.reset_safety()
                     controller.enable()
@@ -125,31 +133,33 @@ def main(argv: list[str] | None = None) -> int:
                 if key in ("0", "."):
                     print(f"\nTCP @ ({tcp[0]:+.3f}, {tcp[1]:+.3f}, {tcp[2]:+.3f})  m")
                     continue
-                if key == "5":   # home
-                    controller.move_joints(home_pose, duration=1.0)
+                if key in ("5", "h"):   # home
+                    if home_pose is not None:
+                        controller.move_joints(home_pose, duration=1.0)
                     continue
-                if key == "9":
+                if key in ("9", "o"):
                     controller.open_gripper()
                     gripper_closed = False
                     continue
-                if key == "1":
+                if key in ("1", "c"):
                     controller.close_gripper()
                     gripper_closed = True
                     continue
 
-                # XYZ jog keys — compute new target and run move_to.
+                # XYZ jog keys: numpad AND letters (laptops without a
+                # numpad were a real complaint). Same motion either way.
                 dx = dy = dz = 0.0
-                if key == "6":
+                if key in ("6", "w"):        # forward (+X, away from base)
                     dx = +step
-                elif key == "4":
+                elif key in ("4", "s"):      # back (-X)
                     dx = -step
-                elif key == "8":
+                elif key in ("8", "a"):      # left (+Y)
                     dy = +step
-                elif key == "2":
+                elif key in ("2", "d"):      # right (-Y)
                     dy = -step
-                elif key == "7":
+                elif key in ("7", "r"):      # up (+Z)
                     dz = +step
-                elif key == "3":
+                elif key in ("3", "f"):      # down (-Z)
                     dz = -step
                 else:
                     continue

@@ -25,6 +25,7 @@ from loophole_arm.control.scene import (
     TableSpec,
     add_scene_to_spec,
 )
+from loophole_arm.robots import load_robot
 from loophole_arm.sim.scene import _build_feetech_spec, _build_ur5e_spec
 
 
@@ -108,14 +109,7 @@ def _apply_industrial_styling(spec: mujoco.MjSpec) -> None:
 # ── TCP / arm coloring helpers ───────────────────────────────────────────
 TCP_SITE = "tcp"
 
-_TCP_OFFSET: dict[str, tuple[float, float, float]] = {
-    "feetech": (0.045, 0.0, 0.005),
-    "ur5e": (0.0, 0.0, 0.10),
-}
-_TCP_PARENT: dict[str, str] = {
-    "feetech": "Gripper",
-    "ur5e": "gripper_base_mount",
-}
+# Which bodies get the accent gripper color, per arm. Purely cosmetic.
 _GRIPPER_BODIES: dict[str, set[str]] = {
     "feetech": {"Gripper"},
     "ur5e": {"gripper_base_mount"},
@@ -142,13 +136,22 @@ def _color_arm_geoms(spec: mujoco.MjSpec, arm: str) -> None:
 
 
 def _add_tcp_site(spec: mujoco.MjSpec, arm: str) -> None:
-    """Attach a TCP site to the gripper body as the IK control frame."""
-    parent_name = _TCP_PARENT[arm]
-    offset = _TCP_OFFSET[arm]
-    parent = next(b for b in spec.bodies if b.name == parent_name)
+    """Attach the TCP site declared in the robot's robot.yaml.
+
+    The parent body and local offset come from the catalog (``tcp:`` section),
+    so the control frame is robot configuration, not code. For a gripper, the
+    right choice is the pinch midpoint parented to the NON-moving jaw side,
+    so the point IK controls does not swing when the gripper actuates.
+    """
+    rspec = load_robot(arm)
+    if not rspec.tcp_parent:
+        raise ValueError(
+            f"robots/{arm}/robot.yaml is missing the tcp: section (parent + offset)"
+        )
+    parent = next(b for b in spec.bodies if b.name == rspec.tcp_parent)
     parent.add_site(
         name=TCP_SITE,
-        pos=list(offset),
+        pos=list(rspec.tcp_offset),
         size=[0.005, 0.005, 0.005],
         group=4,
     )
@@ -244,12 +247,14 @@ class ArmHandle:
     """How the server addresses one attached arm in the compiled model.
 
     All names are already prefixed with the arm's ``name`` (e.g. ``"arm_a/"``)
-    by MuJoCo's ``MjSpec.attach``.
+    by MuJoCo's ``MjSpec.attach``. ``home`` comes from the robot's
+    ``robot.yaml`` so clients never hardcode a rest pose.
     """
     name: str
     arm_joints: list[str]
     gripper_actuator: str
     tcp_site: str
+    home: tuple[float, ...] = ()
 
 
 def build_multi_arm_model(
@@ -294,11 +299,15 @@ def build_multi_arm_model(
         frame = parent.worldbody.add_frame(pos=list(inst.mount_pos))
         parent.attach(child, prefix=f"{inst.name}/", frame=frame)
         prefix = f"{inst.name}/"
+        # Joint and gripper names come from robots/<kind>/robot.yaml,
+        # prefixed by the attach namespace.
+        rspec = load_robot(inst.kind)
         handles.append(ArmHandle(
             name=inst.name,
-            arm_joints=[f"{prefix}Joint_{i}" for i in range(1, 7)],
-            gripper_actuator=f"{prefix}Joint_Gripper",
+            arm_joints=[f"{prefix}{j}" for j in rspec.joints],
+            gripper_actuator=f"{prefix}{rspec.gripper_actuator}",
             tcp_site=f"{prefix}{TCP_SITE}",
+            home=rspec.home,
         ))
 
     return parent.compile(), parent, handles

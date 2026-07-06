@@ -23,8 +23,8 @@ THREE LAYERS OF CONTROL  (use whichever fits the task)
                              Move the gripper to a Cartesian point. The IK
                              solver figures out the joint angles.
 
-  Layer 3 — SKILLS           robot.pick(x, y, z)
-                             robot.place(x, y, z)
+  Layer 3 — SKILLS           Pick(x, y, z).run(robot)
+                             Place(x, y, z).run(robot)
                              robot.home(HOME_POSE)
                              robot.open_gripper() / robot.close_gripper()
                              High-level semantic actions.
@@ -80,11 +80,17 @@ def run(robot, home_pose) -> None:
     place_xy = (0.18, -0.08)    # where to place
     surface_z = 0.12            # just above the table surface
 
+    # Skills are the product surface: parameterised, composable primitives.
+    # The same skill objects run unchanged against sim, remote, or hardware.
+    from loophole_arm.skills import Pick, Place
+    from loophole_arm.skills.engine import SkillEngine
+    engine = SkillEngine()
+
     print("→ Picking from", pick_xy)
-    robot.pick(pick_xy[0], pick_xy[1], surface_z)
+    engine.run(Pick(x=pick_xy[0], y=pick_xy[1], z=surface_z), robot)
 
     print("→ Placing at", place_xy)
-    robot.place(place_xy[0], place_xy[1], surface_z)
+    engine.run(Place(x=place_xy[0], y=place_xy[1], z=surface_z), robot)
 
     # ── Return home ────────────────────────────────────────────────────
     print("→ Returning home")

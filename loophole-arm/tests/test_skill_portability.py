@@ -67,7 +67,8 @@ def test_program_runs_on_local_sim() -> None:
     backend.connect()
     backend.enable()
     solver = TCPSolver(model, h.tcp_site, arm_joint_names=h.arm_joints)
-    robot = RobotController(backend=backend, solver=solver, control_hz=20.0)
+    robot = RobotController(backend=backend, solver=solver, control_hz=20.0,
+                            home_pose=h.home)
     _assert_program_runs(robot)
 
 
@@ -88,7 +89,8 @@ def test_same_program_runs_over_the_wire() -> None:
         client.connect()
         solver = TCPSolver(client.kinematic_model(), client.tcp_site,
                            arm_joint_names=client.arm_joint_names)
-        robot = RobotController(backend=client, solver=solver, control_hz=20.0)
+        robot = RobotController(backend=client, solver=solver, control_hz=20.0,
+                                home_pose=client.home_pose)
         robot.enable()
 
         # RemoteBackend.step() sleeps wall-clock; the server has no physics

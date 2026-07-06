@@ -1,11 +1,13 @@
 """The robot interface — the single contract sim and hardware both implement.
 
 This is the load-bearing abstraction for sim-to-real. The controller, the IK
-solver, and every command are written against :class:`RobotInterface`. Two
+solver, and every command are written against :class:`RobotInterface`. Four
 implementations satisfy it:
 
-    SimBackend       drives MuJoCo            → validate here
-    HardwareBackend  drives the Feetech arm   → deploy here
+    SimBackend       drives MuJoCo             -> validate here
+    HardwareBackend  drives the Feetech arm    -> deploy here
+    RemoteBackend    drives a loophole-armd    -> multi-terminal control
+    MockBackend      drives nothing, instantly -> fast tests, fault injection
 
 Because the controller only ever sees this interface, moving a validated
 behaviour from simulation to hardware is a one-line backend swap — the command
@@ -84,6 +86,18 @@ class RobotInterface(ABC):
     @abstractmethod
     def set_gripper(self, closed_fraction: float) -> None:
         """Command the gripper. ``0.0`` = fully open, ``1.0`` = fully closed."""
+
+    # ── Perception (optional) ───────────────────────────────────────────
+    def object_positions(self) -> dict[str, list[float]]:
+        """Live world positions of pickable objects, name -> [x, y, z].
+
+        In simulation this is free: the physics state knows every pose, so
+        SimBackend (and RemoteBackend, over the wire) return real values.
+        Hardware returns {} until a vision system provides perception; the
+        method exists so application code written against sim keeps working
+        unchanged when that lands.
+        """
+        return {}
 
     # ── Timing ──────────────────────────────────────────────────────────
     @abstractmethod

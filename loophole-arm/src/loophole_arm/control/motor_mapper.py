@@ -107,9 +107,10 @@ class MotorMapper:
         during the first hardware bring-up. The motor-name → joint mapping is
         the real one already used by :class:`HardwareBackend`.
         """
-        joints = ["Joint_1", "Joint_2", "Joint_3", "Joint_4", "Joint_5", "Joint_6"]
-        motors = ["shoulder_pan", "shoulder_lift", "elbow_flex",
-                  "wrist_flex", "wrist_roll", "wrist_yaw"]
+        from loophole_arm.robots import load_robot
+        rspec = load_robot("feetech")
+        joints = list(rspec.joints)
+        motors = list(rspec.motors)
         return MotorMapper([
             MotorCalibration(name=j, motor_name=m) for j, m in zip(joints, motors, strict=True)
         ])

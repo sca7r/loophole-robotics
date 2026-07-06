@@ -52,6 +52,7 @@ class RobotEndpoint:
     name: str
     backend: RobotInterface
     solver: TCPSolver | None = None
+    home: tuple[float, ...] = ()      # rest pose from the robot's robot.yaml
 
 
 @dataclass
@@ -82,6 +83,7 @@ class SimServer:
     port: int = 8765
     model_path: str = ""
     physics_hz: float = 500.0
+    show_joint_axes: bool = False     # render an axis marker at every DOF
     _stop: threading.Event = field(default_factory=threading.Event, repr=False)
     _state_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _tcp_server: socketserver.ThreadingTCPServer | None = field(default=None, repr=False)
@@ -169,6 +171,11 @@ class SimServer:
                     return Response(ok=True, value=backend.end_effector_pose().tolist())
                 if req.op == "n_arm_joints":
                     return Response(ok=True, value=backend.n_arm_joints)
+                if req.op == "object_positions":
+                    # Perception is free in sim: the physics state knows
+                    # every object pose. Decorators forward the call down
+                    # to the concrete backend.
+                    return Response(ok=True, value=backend.object_positions())
                 if req.op == "send_joint_targets":
                     backend.send_joint_targets(req.args["targets"])
                     return Response(ok=True)
@@ -221,6 +228,7 @@ class SimServer:
             "arm_joint_names": list(getattr(inner, "arm_joint_names", [])),
             "gripper_actuator": getattr(inner, "gripper_actuator", ""),
             "tcp_site": getattr(inner, "tcp_site", ""),
+            "home": list(ep.home),
         })
 
     # ── Physics loop ────────────────────────────────────────────────────
@@ -265,6 +273,10 @@ class SimServer:
         try:
             import mujoco.viewer
             self._viewer = mujoco.viewer.launch_passive(self.model, self.data)
+            if self.show_joint_axes:
+                # MuJoCo's built-in joint visualization: one axis marker per
+                # DOF (every hinge). Answers "where can this thing move".
+                self._viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_JOINT] = True
             self._viewer.cam.distance = 1.0
             self._viewer.cam.azimuth = 135
             self._viewer.cam.elevation = -22

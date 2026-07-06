@@ -1,17 +1,17 @@
-"""SkillEngine — named-skill registry, sequence runner, and taught-point store.
+"""SkillEngine: named-skill registry, sequence runner, and taught-point store.
 
 The engine is the operator-facing surface of the Skill Engine layer:
 
-* **Registry** — register a skill under a name, run it later by name
+* **Registry**: register a skill under a name, run it later by name
   (:class:`ExecuteSkill` uses this).
-* **Sequence runner** — run a list of skills in order, stop at the first
+* **Sequence runner**: run a list of skills in order, stop at the first
   non-OK result, return the full trace for logging/diagnosis.
-* **Taught points** — named poses the operator records at the teach prompt
+* **Taught points**: named poses the operator records at the teach prompt
   ("teach pick_pose") and later references by name ("pick pick_pose").
   This is the industry teach-pendant pattern: operators think in named
   points, never in raw coordinates.
 
-The engine holds no backend state of its own — every ``run`` takes the
+The engine holds no backend state of its own: every ``run`` takes the
 :class:`RobotController` explicitly, so the same engine instance (and the same
 saved points file) works against sim, remote, and hardware backends.
 """
@@ -74,14 +74,41 @@ class SkillEngine:
 
     # ── Execution ───────────────────────────────────────────────────────
     def run(self, skill: Skill, robot: RobotController) -> SkillResult:
-        """Run one skill, logging start and outcome."""
+        """Run one skill, driving the robot's lifecycle FSM.
+
+        READY -> EXECUTING on start; back to READY on OK/SKIPPED/REJECTED
+        (a rejection means the robot refused and stayed put, nothing broke);
+        ERROR on FAILED or on an exception from the backend. Exceptions are
+        converted to FAILED results so an operator prompt survives a comms
+        fault, per the PRD: every unsafe condition transitions the robot to
+        a predictable safe state.
+        """
+        from loophole_arm.control.lifecycle import Event
+
+        lc = robot.lifecycle
+        if lc.can(Event.START):
+            lc.transition(Event.START)
         logger.info("skill start: %s", skill.describe())
-        result = skill.run(robot)
-        if result.ok:
-            logger.info("skill ok: %s", skill.describe())
+        try:
+            result = skill.run(robot)
+        except Exception as e:
+            logger.exception("skill raised: %s", skill.describe())
+            if lc.can(Event.FAULT):
+                lc.transition(Event.FAULT)
+            return SkillResult.make_failed(skill.name, f"{type(e).__name__}: {e}")
+
+        if result.status == SkillStatus.FAILED:
+            logger.warning("skill failed: %s: %s", skill.describe(), result.detail)
+            if lc.can(Event.FAULT):
+                lc.transition(Event.FAULT)
         else:
-            logger.warning("skill %s: %s — %s",
-                           result.status.value, skill.describe(), result.detail)
+            if result.ok:
+                logger.info("skill ok: %s", skill.describe())
+            else:
+                logger.warning("skill %s: %s: %s",
+                               result.status.value, skill.describe(), result.detail)
+            if lc.can(Event.DONE):
+                lc.transition(Event.DONE)
         return result
 
     def run_sequence(
@@ -100,6 +127,10 @@ class SkillEngine:
                 logger.warning("sequence stopped at %s (%d/%d)",
                                skill.describe(), len(trace), len(skills))
                 break
+        else:
+            # Whole sequence completed: that is one industrial "cycle"
+            # (surfaced by robot.health() as cycle_count).
+            robot._cycle_count += 1
         return trace
 
     # ── Taught points ───────────────────────────────────────────────────

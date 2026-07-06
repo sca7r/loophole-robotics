@@ -181,7 +181,6 @@ Three rewards demonstrate how the optimizer exploits whatever you write:
 | `shaped_lift` | Cup must end near the gripper, flinging stops |
 | `strict_grasp` | Adds contact-time bonus + motion penalty, cleanest motion |
 
-
 ```bash
 loophole-arm-sim optimize --reward strict_grasp --generations 100
 ```
